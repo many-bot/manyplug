@@ -2,8 +2,9 @@ import fs from 'fs-extra';
 import path from 'path';
 import chalk from 'chalk';
 
-const REQUIRED_FIELDS = ['name', 'version', 'category'];
+const REQUIRED_FIELDS = ['name', 'version', 'category', 'service'];
 const VALID_CATEGORIES = ['games', 'media', 'utility', 'service', 'admin', 'fun'];
+const VALID_SERVICES = [true, false];
 
 export async function validateCommand(pluginPath) {
   const targetPath = pluginPath ? path.resolve(pluginPath) : process.cwd();
@@ -49,12 +50,23 @@ export async function validateCommand(pluginPath) {
     errors.push('"dependencies" must be an object');
   }
 
+  // Validate service field
+  if (manifest.service !== undefined && !VALID_SERVICES.includes(manifest.service)) {
+    errors.push('"service" must be a boolean (true or false)');
+  }
+
+  // Warn if service is true but no category hints
+  if (manifest.service === true && manifest.category !== 'service') {
+    warnings.push('Plugin marked as service=true but category is not "service"');
+  }
+
   // Report
   if (errors.length === 0 && warnings.length === 0) {
     console.log(chalk.green('✅ Valid manyplug.json'));
     console.log(chalk.gray(`   Name: ${manifest.name}`));
     console.log(chalk.gray(`   Version: ${manifest.version}`));
     console.log(chalk.gray(`   Category: ${manifest.category}`));
+    console.log(chalk.gray(`   Service: ${manifest.service === true ? 'yes (background)' : 'no (respects isPluginRunning)'}`));
     return;
   }
 

@@ -41,6 +41,7 @@ export async function listCommand(options) {
       name: manifest.name || entry.name,
       version: manifest.version || '-',
       category: manifest.category || '-',
+      service: manifest.service === true,
       status: hasEntry ? chalk.green('✓') : chalk.red('✗'),
       path: path.join('src/plugins', entry.name)
     });
@@ -52,12 +53,14 @@ export async function listCommand(options) {
   }
 
   console.log(chalk.bold('\nInstalled Plugins:\n'));
-  console.log(`${chalk.gray('NAME'.padEnd(20))} ${chalk.gray('VERSION'.padEnd(10))} ${chalk.gray('CATEGORY'.padEnd(12))} STATUS`);
-  console.log(chalk.gray('─'.repeat(55)));
+  console.log(`${chalk.gray('NAME'.padEnd(18))} ${chalk.gray('VERSION'.padEnd(10))} ${chalk.gray('CATEGORY'.padEnd(12))} ${chalk.gray('SRV')} STATUS`);
+  console.log(chalk.gray('─'.repeat(60)));
 
   for (const p of plugins) {
-    console.log(`${p.name.padEnd(20)} ${p.version.padEnd(10)} ${p.category.padEnd(12)} ${p.status}`);
+    const serviceIcon = p.service ? chalk.cyan('●') : chalk.gray('○');
+    console.log(`${p.name.padEnd(18)} ${p.version.padEnd(10)} ${p.category.padEnd(12)} ${serviceIcon}   ${p.status}`);
   }
 
   console.log(chalk.gray(`\nTotal: ${plugins.length} plugin(s)`));
+  console.log(chalk.gray(`Legend: ${chalk.cyan('●')} service (background)  ${chalk.gray('○')} standard (respects isPluginRunning)`));
 }

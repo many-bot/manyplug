@@ -22,6 +22,7 @@ program
   .command('init <name>')
   .description('Create a new plugin boilerplate')
   .option('-c, --category <cat>', 'Plugin category', 'utility')
+  .option('-s, --service', 'Create as a background service', false)
   .action(initCommand);
 
 program
