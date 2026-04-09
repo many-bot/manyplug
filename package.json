@@ -1,0 +1,20 @@
+{
+  "name": "manyplug",
+  "version": "0.1.0",
+  "description": "CLI plugin manager for ManyBot",
+  "type": "module",
+  "bin": {
+    "manyplug": "./bin/manyplug.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["manybot", "plugin", "cli", "whatsapp"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^5.3.0",
+    "fs-extra": "^11.1.1"
+  }
+}
