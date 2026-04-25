@@ -117,17 +117,21 @@ async function delay(ms) {
 
 async function getDirectorySize(dirPath) {
 	let totalSize = 0;
+
 	async function calc(currentPath) {
 		const stats = await fs.stat(currentPath);
+
 		if (stats.isFile()) {
 			totalSize += stats.size;
 		} else if (stats.isDirectory()) {
 			const items = await fs.readdir(currentPath);
+
 			for (const item of items) {
-				await calc(path.join(dirPath, item));
+				await calc(path.join(currentPath, item));
 			}
 		}
 	}
+
 	await calc(dirPath);
 	return totalSize;
 }
@@ -184,6 +188,8 @@ export async function initCommand(name, options = {}) {
 	spinner.start();
 
 	try {
+    const file = (...p) => path.join(pluginDir, ...p);
+
 		// Create directory structure
 		await fs.ensureDir(path.join(pluginDir, 'locale'));
 		spinner.setText('Creating configuration...');
@@ -191,21 +197,23 @@ export async function initCommand(name, options = {}) {
 
 		// Write files
 		const manyplugJson = createManyplugJson(name, category, service);
-		await fs.writeJson(path.join(pluginDir, 'manyplug.json'), manyplugJson, { spaces: 2 });
+		await fs.writeJson(file('manyplug.json'), manyplugJson, { spaces: 2 });
 
 		spinner.setText('Creating entry point...');
 		await delay(100);
-		await fs.writeFile(path.join(pluginDir, 'index.js'), createIndexJs(name));
+		await fs.writeFile(file('index.js'), createIndexJs(name));
 
 		spinner.setText('Creating locale files...');
 		await delay(100);
-		await fs.writeJson(path.join(pluginDir, 'locale', 'pt.json'), createLocalePt(name), { spaces: 2 });
-		await fs.writeJson(path.join(pluginDir, 'locale', 'en.json'), createLocaleEn(name), { spaces: 2 });
+    await Promise.all([
+		  await fs.writeJson(file('locale', 'pt.json'), createLocalePt(name), { spaces: 2 }),
+		  await fs.writeJson(file('locale', 'en.json'), createLocaleEn(name), { spaces: 2 })
+    ]);
 
 		spinner.setText('Creating additional files...');
 		await delay(100);
-		await fs.writeFile(path.join(pluginDir, '.gitignore'), createGitignore());
-		await fs.writeFile(path.join(pluginDir, 'README.md'), createReadme(name));
+		await fs.writeFile(file('.gitignore'), createGitignore());
+		await fs.writeFile(file('README.md'), createReadme(name));
 
 		const size = await getDirectorySize(pluginDir);
 
