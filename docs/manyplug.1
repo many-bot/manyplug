@@ -1,0 +1,272 @@
+.TH MANYPLUG 1 "2026-04-20" "v0.1.0" "ManyPlug Manual"
+.SH NAME
+manyplug \- CLI plugin manager for ManyBot
+.SH SYNOPSIS
+.B manyplug
+.I command
+.RI [ options ]
+.RI [ arguments ]
+.SH DESCRIPTION
+.B manyplug
+is a command-line plugin manager designed specifically for ManyBot, a WhatsApp bot framework.
+It provides a complete plugin management system for creating, installing, enabling, disabling,
+removing, and validating plugins.
+.PP
+Plugins can be installed from remote registries (via git) or from local paths.
+Each plugin follows a standardized structure with metadata defined in
+.BR manyplug.json .
+.SH COMMANDS
+.SS "init [name]"
+Create a new plugin boilerplate with the proper directory structure.
+.PP
+Options:
+.RS
+.TP
+.BR \-c ", " \-\-category " <cat>"
+Plugin category: games, media, utility, service, admin, or fun (default: utility)
+.TP
+.B \-\-service
+Mark the plugin as a service plugin (runs in background)
+.RE
+.SS "install [plugins...]"
+Install one or more plugins from the registry or a local path.
+.PP
+Options:
+.RS
+.TP
+.BR \-l ", " \-\-local " <path>"
+Install from a local directory instead of the registry (single plugin only)
+.TP
+.BR \-y ", " \-\-yes
+Skip confirmation prompts
+.TP
+.B \-\-needed
+Skip reinstalling plugins that are already up-to-date (pacman-style)
+.RE
+.SS "remove [plugins...]"
+Remove installed plugins. Aliased as
+.BR rm .
+.PP
+Options:
+.RS
+.TP
+.BR \-y ", " \-\-yes
+Skip confirmation prompts
+.TP
+.B \-\-remove\-deps
+Also remove npm dependencies installed for the plugin
+.RE
+.SS "list"
+List all installed plugins (enabled only by default). Aliased as
+.BR ls .
+.PP
+Options:
+.RS
+.TP
+.BR \-a ", " \-\-all
+Include disabled plugins in the listing
+.RE
+.SS "enable [plugins...]"
+Enable one or more installed plugins. Enabled plugins are loaded by ManyBot on startup.
+.SS "disable [plugins...]"
+Disable one or more installed plugins. Disabled plugins remain installed but are not loaded.
+.SS "sync"
+Synchronize the local registry with remote repositories.
+.PP
+Options:
+.RS
+.TP
+.B \-\-no\-add
+Do not add new plugins discovered in the remote registry
+.TP
+.BR \-u ", " \-\-update
+Install or update plugins from the remote registry
+.RE
+.SS "update"
+Update all plugins from remote (equivalent to
+.BR "sync --update" ).
+.SS "validate [path]"
+Validate a plugin's
+.B manyplug.json
+configuration file. Aliased as
+.BR val .
+.PP
+If no path is specified, validates the current directory.
+.SH "PLUGIN STRUCTURE"
+A valid plugin follows this directory structure:
+.PP
+.RS
+.nf
+my-plugin/
+├── manyplug.json    # Plugin metadata (required)
+├── index.js         # Entry point (or as specified in main)
+├── locale/          # Translations (recommended)
+│   ├── pt.json
+│   ├── en.json
+│   └── es.json
+└── README.md        # Documentation
+.fi
+.RE
+.SH "MANYPLUG.JSON"
+The
+.B manyplug.json
+file defines plugin metadata. Required fields:
+.PP
+.RS
+.TP
+.B name
+Plugin name (lowercase letters, numbers, hyphens; 2-50 characters)
+.TP
+.B version
+Semantic version (e.g., "1.0.0")
+.TP
+.B category
+One of: games, media, utility, service, admin, fun
+.RE
+.PP
+Optional fields:
+.PP
+.RS
+.TP
+.B service
+Set to true for background service plugins
+.TP
+.B description
+Plugin description
+.TP
+.B author
+Author name
+.TP
+.B license
+License identifier (e.g., "MIT")
+.TP
+.B main
+Entry point file (default: "index.js")
+.TP
+.B dependencies
+npm dependencies object
+.TP
+.B externalDependencies
+System command dependencies object
+.RE
+.SH "SERVICE PLUGINS"
+Service plugins (marked with
+.B "service: true"
+) run continuously in the background rather than responding to commands.
+They are useful for tasks like tracking user activity, scheduled jobs, or maintaining state.
+.SH "EXTERNAL DEPENDENCIES"
+Plugins can declare system-level dependencies in
+.BR manyplug.json :
+.PP
+.RS
+.nf
+"externalDependencies": {
+  "ffmpeg": "ffmpeg",
+  "python3": {
+    "command": "python3",
+    "optional": true
+  }
+}
+.fi
+.RE
+.PP
+The
+.B validate
+command checks if these commands exist in the system PATH.
+.SH "REGISTRY"
+ManyPlug maintains a local
+.B registry.json
+file tracking installed plugins, their versions, categories, and whether they are local or remote.
+.PP
+The remote registry is fetched from configured mirrors (see
+.BR config.json ).
+.SH "PLUGIN ENTRY POINT"
+A plugin's entry file exports an async function receiving
+.B msg
+and
+.B api
+objects:
+.PP
+.RS
+.nf
+export default async function ({ msg, api }) {
+  if (!msg.is(CMD_PREFIX + "command")) return;
+  await msg.reply("Hello!");
+}
+.fi
+.RE
+.SH "FILES"
+.TP
+.I ./registry.json
+Local plugin registry tracking installed plugins
+.TP
+.I ./config.json
+ManyPlug configuration with mirror URLs
+.TP
+.I ./manyplug.json
+Plugin manifest (in plugin directories)
+.TP
+.I ./manybot.conf
+ManyBot plugin configuration (managed by enable/disable)
+.SH "EXAMPLES"
+Create a new utility plugin:
+.PP
+.RS
+.B manyplug init my-plugin --category utility
+.RE
+.PP
+Install plugins from the registry:
+.PP
+.RS
+.B manyplug install fun games
+.RE
+.PP
+Install from a local path:
+.PP
+.RS
+.B manyplug install --local ./my-custom-plugin
+.RE
+.PP
+Install without confirmation:
+.PP
+.RS
+.B manyplug install plugin-name --yes
+.RE
+.PP
+List all plugins including disabled:
+.PP
+.RS
+.B manyplug list --all
+.RE
+.PP
+Enable and disable plugins:
+.PP
+.RS
+.B manyplug enable plugin-a plugin-b
+.br
+.B manyplug disable plugin-a
+.RE
+.PP
+Sync with remote and update all plugins:
+.PP
+.RS
+.B manyplug sync --update
+.RE
+.PP
+Remove a plugin and its dependencies:
+.PP
+.RS
+.B manyplug remove plugin-name --remove-deps
+.RE
+.PP
+Validate a plugin configuration:
+.PP
+.RS
+.B manyplug validate ./my-plugin
+.RE
+.SH "SEE ALSO"
+.BR manybot (1)
+.SH "AUTHORS"
+Written by freakk.dev.
+.br
+Source available at: https://codeberg.com/synt-xerror/manybot

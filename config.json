@@ -1,0 +1,14 @@
+{
+	"mirrors": [
+		{
+			"name": "Freakk.dev",
+			"fetch": "https://git.maneos.net/synt-xerror/manyplug-repo/raw/branch/master/",
+			"git": "https://git.maneos.net/synt-xerror/manyplug-repo"
+		},
+		{
+			"name": "Codeberg",
+			"fetch": "https://codeberg.org/synt-xerror/manyplug-repo/raw/branch/master",
+			"git": "https://codeberg.org/synt-xerror/manyplug-repo"
+		}
+	]
+}	

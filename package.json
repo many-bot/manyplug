@@ -1,20 +1,39 @@
 {
-  "name": "manyplug",
-  "version": "0.1.0",
+  "name": "@freakk.dev/manyplug",
+  "version": "1.0.2",
   "description": "CLI plugin manager for ManyBot",
+  "keywords": [
+    "manybot",
+    "plugin",
+    "cli",
+    "whatsapp"
+  ],
+  "license": "MIT",
+  "author": "freakkdev",
   "type": "module",
+  "main": "./bin/manyplug.js",
   "bin": {
-    "manyplug": "./bin/manyplug.js"
+    "manyplug": "bin/manyplug.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
-  "keywords": ["manybot", "plugin", "cli", "whatsapp"],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
-    "commander": "^11.0.0",
+    "@freakk.dev/manyplug": "^1.0.1",
     "chalk": "^5.3.0",
-    "fs-extra": "^11.1.1"
+    "cli-progress": "^3.12.0",
+    "commander": "^11.0.0",
+    "fs": "^0.0.1-security",
+    "fs-extra": "^11.3.4",
+    "gradient-string": "^3.0.0",
+    "ora": "^8.0.1",
+    "pino": "^9.14.0",
+    "pino-pretty": "^11.0.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.4",
+    "vitest": "^4.1.4"
   }
 }

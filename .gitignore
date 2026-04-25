@@ -1,3 +1,7 @@
 node_modules/
+plugins/
+registry.json
+.claude/
+coverage/
 test-plugin/
 *.log
