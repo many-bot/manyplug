@@ -1,4 +1,4 @@
-# ManyPlug
+![ManyPlug Banner](banner.png)
 
 CLI plugin manager for ManyBot.
 
