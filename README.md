@@ -5,7 +5,7 @@ CLI plugin manager for ManyBot.
 ## Install
 
 ```bash
-npm install -g manyplug
+npm install -g @freakk.dev/manyplug
 # or
 npm link  # for development
 ```
@@ -15,6 +15,9 @@ npm link  # for development
 ```bash
 # Create new plugin
 manyplug init my-plugin --category games
+
+# Install from repository
+manyplug install many-ai
 
 # Install plugin from local path
 manyplug install --local ../my-plugin
