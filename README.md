@@ -2,13 +2,7 @@
 
 CLI plugin manager for ManyBot.
 
-## Install
-
-```bash
-npm install -g @freakk.dev/manyplug
-# or
-npm link  # for development
-```
+https://www.npmjs.com/package/manyplug
 
 ## Usage
 
