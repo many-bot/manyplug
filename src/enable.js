@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 
-const CONF_PATH   = path.join(process.cwd(), 'manybot.conf');
+const CONF_PATH   = path.join(process.cwd(), 'manyplug.conf');
 const PLUGINS_DIR = path.join(process.cwd(), 'src', 'plugins');
 
 // ------------------------------------------------------------
