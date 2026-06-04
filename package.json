@@ -1,8 +1,10 @@
 {
-  "name": "manyplug",
-  "version": "1.3.1",
-  "description": "CLI plugin manager for ManyBot",
-  "man": ["docs/manyplug.1"],
+  "name": "@manybot/manyplug",
+  "version": "2.0.0",
+  "description": "CLI plugin manager for Many bot",
+  "man": [
+    "docs/manyplug.1"
+  ],
   "keywords": [
     "manybot",
     "plugin",
@@ -10,32 +12,20 @@
     "whatsapp"
   ],
   "license": "MIT",
-  "author": "freakkdev",
   "type": "module",
+  "author": {
+    "name": "SyntaxError!",
+    "email": "me@stxerr.dev"
+  },
   "main": "./bin/manyplug.js",
   "bin": {
     "manyplug": "bin/manyplug.js"
   },
-  "scripts": {
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
-  },
   "dependencies": {
-    "@freakk.dev/manyplug": "^1.0.1",
     "chalk": "^5.3.0",
-    "cli-progress": "^3.12.0",
     "commander": "^11.0.0",
-    "fs": "^0.0.1-security",
     "fs-extra": "^11.3.4",
-    "gradient-string": "^3.0.0",
     "ora": "^8.0.1",
-    "pino": "^9.14.0",
-    "pino-pretty": "^11.0.0",
-    "sqlite3": "^5.1.7"
-  },
-  "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.4",
-    "vitest": "^4.1.4"
+    "path": "^0.12.7"
   }
 }
