@@ -1,3 +1,4 @@
+import path from 'path';
 import os from 'os';
 
 export const PLUGINS_DIR = path.join(os.homedir(), '.manybot', 'plugins');
