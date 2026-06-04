@@ -4,7 +4,7 @@ import { exec } from 'node:child_process';
 import { formatSize } from './ui.js';
 import { loadLocalRegistry, saveRegistry } from './registry-ops.js';
 
-const PLUGINS_DIR = path.join(process.cwd(), 'src', 'plugins');
+import { PLUGINS_DIR } from './paths.js';
 
 // ------------------------------------------------------------
 // helpers

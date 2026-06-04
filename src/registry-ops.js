@@ -2,8 +2,9 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { REGISTRY_PATH } from "./paths.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REGISTRY_PATH = path.join(process.cwd(), 'registry.json');
 const CONFIG_PATH   = path.join(__dirname, '..', 'config.json');
 
 // ------------------------------------------------------------

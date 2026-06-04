@@ -2,8 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
 
-const CONF_PATH   = path.resolve(process.cwd(), 'manybot.conf');
-const PLUGINS_DIR = path.join(process.cwd(), 'src', 'plugins');
+import { PLUGINS_DIR, CONF_PATH } from "./paths.js";
 
 // ------------------------------------------------------------
 // conf — reuse same parser as enable-disable reads

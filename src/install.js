@@ -1,13 +1,11 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { execSync } from 'node:child_process';
 import { formatSize } from './ui.js';
 import { loadLocalRegistry, saveRegistry, fetchRemoteRegistry } from './registry-ops.js';
 import { getDirSize, installPluginFromRepo, installNpmDeps } from './utils.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PLUGINS_DIR = path.join(process.cwd(), 'src', 'plugins');
+import { PLUGINS_DIR } from "./paths.js";
 
 // ------------------------------------------------------------
 // helpers
