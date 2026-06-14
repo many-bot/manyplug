@@ -1,28 +1,25 @@
-![ManyPlug Banner](banner.png)
+# ManyPlug
 
 CLI plugin manager for ManyBot.
 
-https://www.npmjs.com/package/manyplug
+https://www.npmjs.com/package/@manybot/manyplug
+
+## Installation
+
+```
+npm i -g @manybot/manyplug
+```
 
 ## Usage
 
 ```bash
-# Get help
-manyplug help [command]
-
-# Create new plugin
-manyplug init my-plugin --category games
-
-# Install from repository
-manyplug install many-ai
-
-# Install plugin from local path
-manyplug install --local ../my-plugin
-
-# List installed plugins
-manyplug list
-
-# Validate manyplug.json
-manyplug validate
-manyplug validate ./my-plugin
+manyplug <command> [options]
 ```
+
+The available commands are displayed by running `manyplug`. To get help for a specific command, use `manyplug help <command>`.
+
+# See also:
+
+[ManyPlug documentation](https://manybot.stxerr.dev/docs/manyplug-cli/)
+
+
