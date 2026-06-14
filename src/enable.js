@@ -1,22 +1,6 @@
 import fs from 'fs-extra';
-import path from 'path';
-import { PLUGINS_DIR, CONF_PATH } from "./paths.js";
-
-// ------------------------------------------------------------
-// conf file — PLUGINS=[a,b,c]
-// ------------------------------------------------------------
-
-async function readEnabled() {
-	if (!await fs.pathExists(CONF_PATH)) return [];
-	const raw = await fs.readFile(CONF_PATH, 'utf-8');
-	const match = raw.match(/PLUGINS=\[\s*([\s\S]*?)\s*\]/);
-	if (!match) return [];
-	return match[1].split(',').map(s => s.trim()).filter(Boolean);
-}
-
-async function writeEnabled(plugins) {
-	await fs.writeFile(CONF_PATH, `PLUGINS=[\n${plugins.map(p => p + ',').join('\n')}\n]\n`, 'utf-8');
-}
+import { PLUGINS_DIR, CONF_PATH } from './paths.js';
+import { readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
 
 // ------------------------------------------------------------
 // enable / disable commands
@@ -29,20 +13,24 @@ async function toggle(names, action) {
 	}
 
 	const t       = Date.now();
-	const enabled = await readEnabled();
+	const enabled = readEnabled();
 	const set     = new Set(enabled);
 	const results = [];
 
 	for (const name of names) {
-		if (action === 'enable' && !await fs.pathExists(path.join(PLUGINS_DIR, name))) {
-			console.error(`x ${name}: not installed`);
-			results.push({ name, changed: false, notFound: true });
-			continue;
+		if (action === 'enable') {
+			const found = await resolvePlugin(name);
+			if (!found) {
+				console.error(`x ${name}: not installed`);
+				results.push({ name, changed: false, notFound: true });
+				continue;
+			}
 		}
-		const was = set.has(name);
-		if (action === 'enable')  set.add(name);
-		else                      set.delete(name);
-		const changed = set.has(name) !== was;
+		const key     = name.toLowerCase();
+		const was     = set.has(key);
+		if (action === 'enable') set.add(key);
+		else                     set.delete(key);
+		const changed = set.has(key) !== was;
 		results.push({ name, changed });
 	}
 
@@ -58,7 +46,7 @@ async function toggle(names, action) {
 	}
 
 	for (const r of results) {
-		if (r.notFound) continue; // already printed above
+		if (r.notFound) continue;
 		const symbol = action === 'enable' ? '+' : '-';
 		const note   = r.changed ? '' : ` (already ${action}d)`;
 		console.log(`${symbol} ${r.name}${note}`);
@@ -81,4 +69,3 @@ export function disableCommand(input) {
 	const names = Array.isArray(input) ? input : (input ? [input] : []);
 	return toggle(names, 'disable');
 }
-

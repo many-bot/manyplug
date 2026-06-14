@@ -30,16 +30,23 @@ export async function saveRegistry(registry) {
 
 // ------------------------------------------------------------
 
-// onMirror(mirror, 'ok'|'fail', errMsg?) — optional progress callback
-export async function fetchRemoteRegistry(onMirror = () => {}) {
+export async function fetchRemoteRegistry() {
 	for (const mirror of MIRRORS) {
 		try {
-			const res = await fetch(`${mirror.fetch}/registry.json`);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			onMirror(mirror, 'ok');
-			return { remoteRegistry: await res.json(), selectedMirror: mirror };
+			const [regRes, idxRes] = await Promise.all([
+				fetch(`${mirror.fetch}/registry.json`),
+				fetch(`https://manybot.stxerr.dev/manyplug/mpindex.json`),
+			]);
+			if (!regRes.ok && !idxRes.ok)
+				throw new Error(`HTTP ${regRes.status} / ${idxRes.status}`);
+			const legacy = regRes.ok ? await regRes.json() : { plugins: {} };
+			const fresh  = idxRes.ok ? await idxRes.json() : { plugins: {} };
+			return {
+				remoteRegistry: { plugins: { ...legacy.plugins, ...fresh.plugins } },
+				selectedMirror: mirror,
+			};
 		} catch (e) {
-			onMirror(mirror, 'fail', e.message);
+			// mirror falhou, tenta o próximo
 		}
 	}
 	throw new Error('all mirrors failed');

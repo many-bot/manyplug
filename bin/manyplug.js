@@ -2,13 +2,12 @@
 
 import { program } from 'commander';
 import { createRequire } from 'module';
-import { installCommand }          from '../src/install.js';
-import { listCommand }             from '../src/list.js';
-import { removeCommand }           from '../src/remove.js';
+import { installCommand, updateCommand } from '../src/install.js';
+import { listCommand }                  from '../src/list.js';
+import { removeCommand }                from '../src/remove.js';
 import { enableCommand, disableCommand } from '../src/enable.js';
-import { syncCommand, updateCommand }    from '../src/sync.js';
-import { initCommand }             from '../src/init.js';
-import { validateCommand }         from '../src/validate.js';
+import { initCommand }                  from '../src/init.js';
+import { validateCommand }              from '../src/validate.js';
 
 const pkg = createRequire(import.meta.url)('../package.json');
 
@@ -20,7 +19,7 @@ function printHelp(cmd) {
 	if (!cmd) {
 		console.log(`manyplug ${pkg.version} — plugin manager for ManyBot`);
 		console.log('https://git.stxerr.dev/manyplug.git\n');
-		console.log('commands: init install remove list enable disable sync update validate');
+		console.log('commands: init install update remove list enable disable validate');
 		console.log('options:  -v/--version  help <command>');
 		return;
 	}
@@ -63,10 +62,15 @@ program.command('init [name]').description('create new plugin boilerplate')
 	.action(initCommand);
 
 program.command('install [plugins...]').description('install plugins from registry or local path')
-	.option('-l, --local <path>', 'install from local path')
-	.option('-y, --yes',          'skip confirmation')
-	.option('--needed',           'skip already up-to-date plugins')
+	.option('-l, --local <path>',   'install from local path')
+	.option('-b, --branch <branch>', 'install from a specific branch')
+	.option('-y, --yes',             'skip confirmation')
+	.option('--needed',              'skip already installed plugins')
 	.action(installCommand);
+
+program.command('update').description('reinstall all non-local plugins')
+	.option('-y, --yes', 'skip confirmation')
+	.action(updateCommand);
 
 program.command('remove [plugins...]').alias('rm').description('remove installed plugins')
 	.option('-y, --yes',          'skip confirmation')
@@ -85,14 +89,6 @@ program.command('disable [plugins...]').description('disable plugins')
 
 program.command('validate [path]').alias('val').description('validate manyplug.json')
 	.action(validateCommand);
-
-program.command('sync').description('sync local registry with remote')
-	.option('-f, --force', 'save even if nothing changed')
-	.action(syncCommand);
-
-program.command('update').description('install/update all plugins from remote')
-	.option('-y, --yes', 'skip confirmation')
-	.action(updateCommand);
 
 // ------------------------------------------------------------
 

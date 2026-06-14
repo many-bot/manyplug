@@ -3,12 +3,11 @@ import path from 'path';
 import { exec } from 'node:child_process';
 import { formatSize } from './ui.js';
 import { loadLocalRegistry, saveRegistry } from './registry-ops.js';
+import { readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
 
-import { PLUGINS_DIR } from './paths.js';
-
+// ------------------------------------------------------------
 // ------------------------------------------------------------
 // helpers
-// ------------------------------------------------------------
 
 function elapsed(since) { return ((Date.now() - since) / 1000).toFixed(2); }
 
@@ -48,67 +47,74 @@ export async function removeCommand(input, options = {}) {
 	const results = [];
 
 	for (const name of names) {
-		const dir          = path.join(PLUGINS_DIR, name);
-		const manifestPath = path.join(dir, 'manyplug.json');
+		const found = await resolvePlugin(name);
 
-		if (!await fs.pathExists(manifestPath)) {
+		if (!found) {
 			console.error(`x ${name}: not installed`);
 			results.push({ name, success: false });
+      process.stdin.destroy();
 			continue;
 		}
 
-		let manifest = {};
-		try { manifest = await fs.readJson(manifestPath); } catch {}
+		const { dir, manifest } = found;
+		const size    = await getDirSize(dir);
+		const deps    = manifest.dependencies || {};
 
-		const size = await getDirSize(dir);
-		const deps = manifest.dependencies || {};
-		const hasDeps = Object.keys(deps).length > 0;
-
-		console.log(`- ${name}@${manifest.version || '?'}  size=${formatSize(size)}  path=${path.relative(process.cwd(), dir)}`);
-		if (hasDeps) console.log(`  deps: ${Object.keys(deps).join(', ')}`);
+		console.log(`- ${found.name}@${manifest.version || '?'}  size=${formatSize(size)}  path=${path.relative(process.cwd(), dir)}`);
 
 		if (!options.yes) {
 			const answer = await ask('remove? [y/N] ');
 			if (answer !== 'y') {
-				console.log(`  skipped`);
+				console.log('  skipped');
 				results.push({ name, success: false, skipped: true });
+        process.stdin.destroy();
 				continue;
 			}
 		}
 
 		try {
+			// disable before removing
+      const enabled   = readEnabled();
+      const set       = new Set(enabled);
+      const keySimple = found.name.toLowerCase();
+      const keyFull   = found.manifest.key?.toLowerCase();
+      
+      if (set.has(keySimple)) set.delete(keySimple);
+      if (keyFull && set.has(keyFull)) set.delete(keyFull);
+      
+      if (set.size !== enabled.size) {
+        await writeEnabled([...set]);
+        console.log(`  disabled ${found.manifest.key || found.name}`);
+      }
+
 			await fs.remove(dir);
 
 			const registry = await loadLocalRegistry();
-			delete registry.plugins[name];
-			await saveRegistry(registry);
-
-			if (hasDeps && options.removeDeps) {
-				process.stdout.write(`  uninstalling npm deps... `);
-				try {
-					await run(`npm uninstall ${Object.keys(deps).join(' ')}`, process.cwd());
-					console.log('ok');
-				} catch (e) {
-					console.log(`warn: ${e.message}`);
-				}
+			// remove by manifest.name or dir basename
+			const regKey = Object.keys(registry.plugins || {}).find(k =>
+				k === found.name || k.split('/').pop() === found.name
+			);
+			if (regKey) {
+				delete registry.plugins[regKey];
+				await saveRegistry(registry);
 			}
 
 			console.log(`  done  freed=${formatSize(size)}`);
 			results.push({ name, success: true, size });
+      process.stdin.destroy();
 		} catch (e) {
 			console.error(`  FAILED: ${e.message}`);
 			results.push({ name, success: false, error: e.message });
+      process.stdin.destroy();
 		}
 	}
 
-	// summary
-	const ok      = results.filter(r => r.success).length;
-	const bad     = results.length - ok;
-	const freed   = results.reduce((a, r) => a + (r.size || 0), 0);
+	const ok    = results.filter(r => r.success).length;
+	const bad   = results.length - ok;
+	const freed = results.reduce((a, r) => a + (r.size || 0), 0);
 
-	if (names.length > 1) {
+	if (names.length > 1)
 		console.log(`\n${ok}/${names.length} removed  freed=${formatSize(freed)}  time=${elapsed(t)}s`);
-	}
 
 	if (bad && !results.every(r => r.skipped)) process.exit(1);
 }

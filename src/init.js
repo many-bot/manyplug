@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { formatSize } from './ui.js';
+import { getDirSize } from './utils.js';
 
 const VALID_CATEGORIES = ['games', 'media', 'utility', 'service', 'admin', 'fun'];
 
@@ -8,20 +9,29 @@ const VALID_CATEGORIES = ['games', 'media', 'utility', 'service', 'admin', 'fun'
 // templates
 // ------------------------------------------------------------
 
-const manyplugJson = (name, category, service) => ({
-	name, version: '1.0.0',
+const manyplugJson = (name, author, category, service) => ({
+	name,
+	key:         `${author}/${name}`,
+	version:     '1.0.0',
 	description: `${name} plugin for ManyBot`,
-	category, service,
-	author: '', license: 'MIT', main: 'index.js',
-	dependencies: {}, externalDependencies: {}
+	category,
+	service,
+	author:      { name: author },
+	license:     'MIT',
+	main:        'index.js',
+	dependencies:         {},
+	externalDependencies: {},
 });
 
 const indexJs = (name) => `\
-// ${name} — ManyBot plugin
-import { CMD_PREFIX } from "../../config.js";
+// ${name} - ManyBot plugin
+// See API reference here: https://manybot.stxerr.dev/docs/api-reference
 
-export default async function ({ msg, api }) {
-  if (!msg.is(CMD_PREFIX + "hi")) return;
+export default async function (ctx) {
+  const { msg } = ctx.msg;
+  const pfx = ctx.config.get("CMD_PREFIX");
+
+  if (!msg.is(pfx + "hi")) return;
   await msg.reply("Hello!");
 }
 `;
@@ -35,12 +45,6 @@ const readme = (name) => `\
 # ${name}
 
 Plugin for ManyBot.
-
-## Installation
-
-\`\`\`bash
-manyplug install ${name}
-\`\`\`
 
 ## Usage
 
@@ -64,8 +68,17 @@ export async function initCommand(name, options = {}) {
 	}
 
 	const category = VALID_CATEGORIES.includes(options.category) ? options.category : 'utility';
-	if (!VALID_CATEGORIES.includes(options.category)) {
-		console.warn(`warn: unknown category, using "utility"`);
+	if (!VALID_CATEGORIES.includes(options.category))
+		console.warn('warn: unknown category, using "utility"');
+
+	// prompt for author handle
+	process.stdout.write('author handle (e.g. your GitHub username): ');
+	const author = await new Promise(res =>
+		process.stdin.once('data', d => res(d.toString().trim()))
+	);
+	if (!author || !/^[a-z0-9-]+$/i.test(author)) {
+		console.error('error: author must be alphanumeric');
+		process.exit(1);
 	}
 
 	const dir     = path.resolve(name);
@@ -73,17 +86,20 @@ export async function initCommand(name, options = {}) {
 
 	if (await fs.pathExists(dir)) {
 		process.stdout.write(`"${name}" already exists, overwrite? [y/N] `);
-		const answer = await new Promise(res => process.stdin.once('data', d => res(d.toString().trim().toLowerCase())));
+		const answer = await new Promise(res =>
+			process.stdin.once('data', d => res(d.toString().trim().toLowerCase()))
+		);
 		if (answer !== 'y') { console.log('cancelled'); process.exit(0); }
 	}
 
 	const f = (...p) => path.join(dir, ...p);
 
-	console.log(`creating ${name}  category=${category}  service=${service}`);
+	console.log(`creating ${author}/${name}  category=${category}  service=${service}`);
 
 	try {
 		await fs.ensureDir(f('locale'));
-		await fs.writeJson(f('manyplug.json'), manyplugJson(name, category, service), { spaces: 2 });
+		await fs.writeJson(f('manyplug.json'), manyplugJson(name, author, category, service), { spaces: 2 });
+		await fs.writeJson(f('package.json'), { type: 'module' }, { spaces: 2 });
 		await fs.writeFile(f('index.js'), indexJs(name));
 		await fs.writeJson(f('locale', 'pt.json'), localePt(name), { spaces: 2 });
 		await fs.writeJson(f('locale', 'en.json'), localeEn(name), { spaces: 2 });
@@ -94,18 +110,9 @@ export async function initCommand(name, options = {}) {
 		process.exit(1);
 	}
 
-	const size = await fs.stat(dir).then(() => getDirSize(dir));
+	const size = await getDirSize(dir);
 	console.log(`done  size=${formatSize(size)}  time=${((Date.now() - t) / 1000).toFixed(2)}s`);
 	console.log(`  cd ${name}`);
 	console.log(`  manyplug validate .`);
 	console.log(`  manyplug install --local .`);
-}
-
-async function getDirSize(dir) {
-	let total = 0;
-	for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-		const p = path.join(dir, entry.name);
-		total += entry.isDirectory() ? await getDirSize(p) : (await fs.stat(p)).size;
-	}
-	return total;
 }

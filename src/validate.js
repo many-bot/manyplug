@@ -2,30 +2,49 @@ import fs from 'fs-extra';
 import path from 'path';
 import { execSync } from 'node:child_process';
 
-const VALID_CATEGORIES = ['games', 'media', 'utility', 'service', 'admin', 'fun'];
+const VALID_CATEGORIES = ['integration', 'games', 'media', 'utility', 'service', 'admin', 'fun'];
 
 // ------------------------------------------------------------
 // rules — each returns an error string or null
 // ------------------------------------------------------------
 
 const RULES = {
-	name:    v => typeof v !== 'string' || !v              ? 'required string'
-	            : !/^[a-z0-9-]+$/.test(v)                  ? 'lowercase letters, numbers, hyphens only'
-	            : v.length < 2 || v.length > 50             ? 'length must be 2-50'
-	            : null,
+	name: v =>
+		typeof v !== 'string' || !v        ? 'required string'
+		: !/^[a-z0-9-]+$/.test(v)          ? 'lowercase letters, numbers, hyphens only'
+		: v.length < 2 || v.length > 50    ? 'length must be 2-50'
+		: null,
 
-	version: v => typeof v !== 'string' || !v              ? 'required string'
-	            : !/^\d+\.\d+\.\d+/.test(v)                ? 'must be semver (e.g. 1.0.0)'
-	            : null,
+	key: v => {
+		if (v === undefined) return null; // optional but validated if present
+		if (typeof v !== 'string') return 'must be string';
+		if (!/^[a-zA-Z0-9_-]+\/[a-z0-9-]+$/.test(v)) return 'must be format author/name';
+		return null;
+	},
 
-	category: v => !VALID_CATEGORIES.includes(v)           ? `must be one of: ${VALID_CATEGORIES.join(', ')}`
-	             : null,
+	version: v =>
+		typeof v !== 'string' || !v        ? 'required string'
+		: null,
+
+	category: v => !VALID_CATEGORIES.includes(v)
+		? `must be one of: ${VALID_CATEGORIES.join(', ')}`
+		: null,
+
+	author: v => {
+		if (v === undefined || v === null) return null;
+		if (typeof v === 'string') return null; // legacy plain string ok
+		if (typeof v !== 'object') return 'must be string or object';
+		if (!v.name || typeof v.name !== 'string') return 'author.name must be a string';
+		return null;
+	},
 
 	service:  v => v !== undefined && typeof v !== 'boolean' ? 'must be boolean' : null,
 	local:    v => v !== undefined && typeof v !== 'boolean' ? 'must be boolean' : null,
 	main:     v => v !== undefined && typeof v !== 'string'  ? 'must be string'  : null,
 
-	dependencies:         v => v !== undefined && typeof v !== 'object' ? 'must be object' : null,
+	dependencies: v =>
+		v !== undefined && typeof v !== 'object' ? 'must be object' : null,
+
 	externalDependencies: v => {
 		if (v === undefined) return null;
 		if (typeof v !== 'object') return 'must be object';
@@ -36,11 +55,15 @@ const RULES = {
 			if (c.optional !== undefined && typeof c.optional !== 'boolean') return `${n}.optional must be boolean`;
 		}
 		return null;
-	}
+	},
 };
 
 const REQUIRED = ['name', 'version', 'category'];
-const KNOWN    = new Set([...REQUIRED, 'service', 'local', 'description', 'author', 'license', 'main', 'dependencies', 'externalDependencies']);
+const KNOWN    = new Set([
+	...REQUIRED,
+	'key', 'author', 'service', 'local', 'description',
+	'license', 'main', 'dependencies', 'externalDependencies',
+]);
 
 function commandExists(cmd) {
 	try {
@@ -87,6 +110,17 @@ export async function validateCommand(pluginPath = '.') {
 		if (msg) err(f, msg);
 	}
 
+	// key consistency check
+	if (manifest.key && manifest.name) {
+		const expectedSuffix = `/${manifest.name}`;
+		if (!manifest.key.endsWith(expectedSuffix))
+			warn('key', `key suffix doesn't match name (expected .../${manifest.name})`);
+	}
+
+	// recommended fields
+	if (!manifest.key)    warn('key',    'missing key (author/name) — required for publishing');
+	if (!manifest.author) warn('author', 'missing author — recommended for publishing');
+
 	// entry point
 	const main = manifest.main || 'index.js';
 	if (!await fs.pathExists(path.join(abs, main)))
@@ -116,6 +150,5 @@ export async function validateCommand(pluginPath = '.') {
 	}
 
 	console.log(`\nerrors=${errors.length}  warnings=${warnings.length}`);
-
 	if (errors.length) process.exit(1);
 }
