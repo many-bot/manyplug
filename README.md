@@ -22,4 +22,6 @@ The available commands are displayed by running `manyplug`. To get help for a sp
 
 [ManyPlug documentation](https://manybot.stxerr.dev/docs/manyplug-cli/)
 
+# License
 
+[MIT](LICENSE)
