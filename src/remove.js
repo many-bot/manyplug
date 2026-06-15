@@ -4,6 +4,7 @@ import { exec } from 'node:child_process';
 import { formatSize } from './ui.js';
 import { loadLocalRegistry, saveRegistry } from './registry-ops.js';
 import { readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
+import readline from 'node:readline';
 
 // ------------------------------------------------------------
 // ------------------------------------------------------------
@@ -26,9 +27,25 @@ async function getDirSize(dir) {
 	return total;
 }
 
+let lineIterator = null;
+
+function getLineIterator() {
+  if (!lineIterator) {
+    const rl = readline.createInterface({ input: process.stdin, terminal: false });
+    lineIterator = rl[Symbol.asyncIterator]();
+  }
+  return lineIterator;
+}
+
 async function ask(prompt) {
-	process.stdout.write(prompt);
-	return new Promise(res => process.stdin.once('data', d => res(d.toString().trim().toLowerCase())));
+  process.stdout.write(prompt);
+  const iter = getLineIterator();
+  const { value } = await iter.next();
+  return (value ?? '').trim().toLowerCase();
+}
+
+function closeRL() {
+  lineIterator = null;
 }
 
 // ------------------------------------------------------------
@@ -38,59 +55,42 @@ async function ask(prompt) {
 export async function removeCommand(input, options = {}) {
 	const t     = Date.now();
 	const names = Array.isArray(input) ? input : (input ? [input] : []);
-
 	if (!names.length) {
 		console.error('usage: manyplug remove <plugin> [plugin2...]');
 		process.exit(1);
 	}
-
 	const results = [];
-
 	for (const name of names) {
 		const found = await resolvePlugin(name);
-
 		if (!found) {
 			console.error(`x ${name}: not installed`);
 			results.push({ name, success: false });
-      process.stdin.destroy();
-			continue;
+			continue;                          // ← sem destroy aqui
 		}
-
 		const { dir, manifest } = found;
-		const size    = await getDirSize(dir);
-		const deps    = manifest.dependencies || {};
-
+		const size = await getDirSize(dir);
 		console.log(`- ${found.name}@${manifest.version || '?'}  size=${formatSize(size)}  path=${path.relative(process.cwd(), dir)}`);
-
 		if (!options.yes) {
 			const answer = await ask('remove? [y/N] ');
 			if (answer !== 'y') {
 				console.log('  skipped');
 				results.push({ name, success: false, skipped: true });
-        process.stdin.destroy();
 				continue;
 			}
 		}
-
 		try {
-			// disable before removing
-      const enabled   = readEnabled();
-      const set       = new Set(enabled);
-      const keySimple = found.name.toLowerCase();
-      const keyFull   = found.manifest.key?.toLowerCase();
-      
-      if (set.has(keySimple)) set.delete(keySimple);
-      if (keyFull && set.has(keyFull)) set.delete(keyFull);
-      
-      if (set.size !== enabled.size) {
-        await writeEnabled([...set]);
-        console.log(`  disabled ${found.manifest.key || found.name}`);
-      }
-
+			const enabled   = readEnabled();
+			const set       = new Set(enabled);
+			const keySimple = found.name.toLowerCase();
+			const keyFull   = found.manifest.key?.toLowerCase();
+			if (set.has(keySimple)) set.delete(keySimple);
+			if (keyFull && set.has(keyFull)) set.delete(keyFull);
+			if (set.size !== enabled.length) {
+				await writeEnabled([...set]);
+				console.log(`  disabled ${found.manifest.key || found.name}`);
+			}
 			await fs.remove(dir);
-
 			const registry = await loadLocalRegistry();
-			// remove by manifest.name or dir basename
 			const regKey = Object.keys(registry.plugins || {}).find(k =>
 				k === found.name || k.split('/').pop() === found.name
 			);
@@ -98,23 +98,20 @@ export async function removeCommand(input, options = {}) {
 				delete registry.plugins[regKey];
 				await saveRegistry(registry);
 			}
-
 			console.log(`  done  freed=${formatSize(size)}`);
 			results.push({ name, success: true, size });
-      process.stdin.destroy();
 		} catch (e) {
 			console.error(`  FAILED: ${e.message}`);
 			results.push({ name, success: false, error: e.message });
-      process.stdin.destroy();
 		}
 	}
+
+  closeRL();
 
 	const ok    = results.filter(r => r.success).length;
 	const bad   = results.length - ok;
 	const freed = results.reduce((a, r) => a + (r.size || 0), 0);
-
 	if (names.length > 1)
 		console.log(`\n${ok}/${names.length} removed  freed=${formatSize(freed)}  time=${elapsed(t)}s`);
-
-	if (bad && !results.every(r => r.skipped)) process.exit(1);
+	if (results.some(r => !r.success && !r.skipped)) process.exit(1);
 }
