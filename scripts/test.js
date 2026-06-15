@@ -112,6 +112,45 @@ isolated('remove ambiguous name', (mp, mpf, home) => {
   assert.ok(out.includes('ambiguous'), `expected ambiguous error, got:\n${out}`);
 });
 
+isolated('remove multiple plugins', (mp, mpf, home) => {
+  mp('install synt-xerror/figurinha');
+  mp('install synt-xerror/counting');
+  const out = mp('remove -y synt-xerror/figurinha synt-xerror/counting');
+  assert.ok(out.includes('2/2 removed'), `unexpected output:\n${out}`);
+});
+
+isolated('remove multiple — one missing', (mp, mpf, home) => {
+  mp('install synt-xerror/counting');
+  const out = mpf('remove -y synt-xerror/counting nao-existe');
+  assert.ok(out.includes('not installed'), `unexpected output:\n${out}`);
+  assert.ok(out.includes('freed='),        `unexpected output:\n${out}`);
+});
+
+isolated('remove multiple plugins interactive', (mp, mpf, home) => {
+  mp('install synt-xerror/figurinha');
+  mp('install synt-xerror/counting');
+  const out = execSync(
+    `HOME=${home} node ${BIN} remove synt-xerror/figurinha synt-xerror/counting`,
+    { encoding: 'utf-8', input: 'y\ny\n' }  // ← stdin injetado direto
+  );
+  assert.ok(out.includes('2/2 removed'), `unexpected output:\n${out}`);
+});
+
+isolated('remove multiple — skip first confirm second', (mp, mpf, home) => {
+  mp('install synt-xerror/figurinha');
+  mp('install synt-xerror/counting');
+  let out;
+  try {
+    out = execSync(
+      `HOME=${home} node ${BIN} remove synt-xerror/figurinha synt-xerror/counting`,
+      { encoding: 'utf-8', input: '\ny\n' }
+    );
+  } catch (e) {
+    out = e.stdout ?? '';
+  }
+  assert.ok(out.includes('skipped'), `unexpected output:\n${out}`);
+  assert.ok(out.includes('freed='),  `unexpected output:\n${out}`);
+});
 // ------------------------------------------------------------
 // enable / disable
 // ------------------------------------------------------------
