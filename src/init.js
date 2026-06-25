@@ -18,6 +18,7 @@ const manyplugJson = (name, author, category, service) => ({
 	service,
 	author:      { name: author },
 	license:     'MIT',
+  repo:        `https://github.com/${author}/${name}.many`,
 	main:        'index.js',
 	dependencies:         {},
 	externalDependencies: {},
@@ -28,18 +29,17 @@ const indexJs = (name) => `\
 // See API reference here: https://manybot.stxerr.dev/docs/api-reference
 
 export default async function (ctx) {
-  const { msg } = ctx.msg;
-  const pfx = ctx.config.get("CMD_PREFIX");
+  const { msg } = ctx;
 
-  if (!msg.is(pfx + "hi")) return;
-  await msg.reply("Hello!");
+  if (!msg.is("ping")) return;
+  await msg.reply.text("Pong!");
 }
 `;
 
 const localePt = (name) => ({ plugin: { name, description: `Plugin ${name} para ManyBot` }, commands: {} });
 const localeEn = (name) => ({ plugin: { name, description: `${name} plugin for ManyBot` },  commands: {} });
 
-const gitignore = () => `node_modules/\npackage-lock.json\n*.log\n.vscode/\n.DS_Store\ncoverage/\n`;
+const gitignore = () => `node_modules/\npackage-lock.json\n*.log\n.vscode/\n.DS_Store\ncoverage/\n# DO NOT put manyplug.json here. It needs to be on the repository.`;
 
 const readme = (name) => `\
 # ${name}
@@ -62,10 +62,10 @@ MIT
 export async function initCommand(name, options = {}) {
 	const t = Date.now();
 
-	if (!name || !/^[a-z0-9-]+$/.test(name)) {
-		console.error('error: name must be lowercase letters, numbers, and hyphens only');
-		process.exit(1);
-	}
+  if (!name || !/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(name)) {
+    console.error('error: name must be lowercase letters, numbers, dots, underscores and hyphens only');
+    process.exit(1);
+  }
 
 	const category = VALID_CATEGORIES.includes(options.category) ? options.category : 'utility';
 	if (!VALID_CATEGORIES.includes(options.category))
@@ -112,6 +112,7 @@ export async function initCommand(name, options = {}) {
 
 	const size = await getDirSize(dir);
 	console.log(`done  size=${formatSize(size)}  time=${((Date.now() - t) / 1000).toFixed(2)}s`);
+	console.log(`if you wish to publish, make sure to read manyplug.json and edit with the correct information`);
 	console.log(`  cd ${name}`);
 	console.log(`  manyplug validate .`);
 	console.log(`  manyplug install --local .`);
