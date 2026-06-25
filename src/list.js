@@ -27,7 +27,7 @@ export async function listCommand(options = {}) {
 
 	for (const p of plugins) {
     const displayName = p.manifest.key || p.name;
-		const flag    = p.manifest.local ? 'L' : p._error ? '!' : ' ';
+		const flag    = p._error ? '!' : ' ';
 		const type    = p.manifest.service ? 'svc' : 'std';
 		const status  = !p.hasEntry ? 'incomplete' : p.isEnabled ? 'enabled' : 'disabled';
 		const version  = p.manifest.version  || '-';
@@ -37,10 +37,9 @@ export async function listCommand(options = {}) {
 
 	const en  = plugins.filter(p => p.isEnabled).length;
 	const dis = plugins.length - en;
-	const loc = plugins.filter(p => p.manifest.local).length;
 	const inc = plugins.filter(p => !p.hasEntry).length;
 
 	console.log('');
-	console.log(`total=${plugins.length} enabled=${en} disabled=${dis}${loc ? ' local=' + loc : ''}${inc ? ' incomplete=' + inc : ''}`);
-	console.log('L=local  svc=service  std=standard  !=missing index.js');
+	console.log(`total=${plugins.length} enabled=${en} disabled=${dis}${inc ? ' incomplete=' + inc : ''}`);
+	console.log('svc=service  std=standard  !=missing index.js');
 }
