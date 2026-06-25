@@ -84,9 +84,11 @@ program.command('list').alias('ls').description('list installed plugins (enabled
 	.action(listCommand);
 
 program.command('enable [plugins...]').description('enable plugins')
+	.option('-a, --all', 'enable all plugins')
 	.action(enableCommand);
 
 program.command('disable [plugins...]').description('disable plugins')
+	.option('-a, --all', 'disable all plugins')
 	.action(disableCommand);
 
 program.command('validate [path]').alias('val').description('validate manyplug.json')

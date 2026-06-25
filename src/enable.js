@@ -1,18 +1,35 @@
-import { readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
+import { readEnabled, writeEnabled, resolvePlugin, discoverPlugins } from './plugins.js';
 
 // ------------------------------------------------------------
 // enable / disable commands
 // ------------------------------------------------------------
 
-async function toggle(names, action) {
-	if (!names.length) {
-		console.error(`usage: manyplug ${action} <plugin> [plugin2...]`);
-		process.exit(1);
-	}
-
+async function toggle(names, action, options = {}) {
 	const t       = Date.now();
 	const enabled = readEnabled();
 	const set     = new Set(enabled);
+
+	// --all: operate on every installed plugin
+	if (options.all) {
+		const all = await discoverPlugins();
+		if (!all.length) { console.log('no plugins installed'); return; }
+		for (const p of all) {
+			const key = (p.manifest.key || p.manifest.name).toLowerCase();
+			if (action === 'enable') set.add(key);
+			else                     set.delete(key);
+		}
+		await writeEnabled([...set]);
+		const symbol = action === 'enable' ? '+' : '-';
+		for (const p of all) console.log(`${symbol} ${p.id}`);
+		console.log(`${all.length} plugins ${action}d  (${((Date.now() - t) / 1000).toFixed(2)}s)`);
+		return;
+	}
+
+	if (!names.length) {
+		console.error(`usage: manyplug ${action} <plugin> [plugin2...]  [--all]`);
+		process.exit(1);
+	}
+
 	const results = [];
 
 	for (const name of names) {
@@ -24,10 +41,6 @@ async function toggle(names, action) {
 			continue;
 		}
 
-		// Always use the canonical key from the manifest so the enabled list
-		// stays consistent regardless of how the user addressed the plugin.
-		// Falls back to the user-supplied name only when the plugin isn't
-		// installed (disable of an unknown key is a no-op, not an error).
 		const key = found
 			? (found.manifest.key || found.manifest.name).toLowerCase()
 			: name.toLowerCase();
@@ -65,12 +78,12 @@ async function toggle(names, action) {
 	if (results.some(r => r.notFound)) process.exit(1);
 }
 
-export function enableCommand(input) {
+export function enableCommand(input, options = {}) {
 	const names = Array.isArray(input) ? input : (input ? [input] : []);
-	return toggle(names, 'enable');
+	return toggle(names, 'enable', options);
 }
 
-export function disableCommand(input) {
+export function disableCommand(input, options = {}) {
 	const names = Array.isArray(input) ? input : (input ? [input] : []);
-	return toggle(names, 'disable');
+	return toggle(names, 'disable', options);
 }

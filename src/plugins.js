@@ -128,19 +128,23 @@ export async function discoverPlugins() {
 // ------------------------------------------------------------
 
 export async function resolvePlugin(name) {
-  const all = await discoverPlugins();
+  const all  = await discoverPlugins();
+  const key  = name.toLowerCase();
 
-  const matches = all.filter(p =>
-    p.id === name.toLowerCase()
-  );
+  // exact match first (author/name or bare name)
+  const exact = all.filter(p => p.id === key);
+  if (exact.length === 1) return exact[0];
 
-  if (matches.length > 1) {
-    console.error(`ambiguous: "${name}"`);
-    for (const m of matches) {
-      console.error(`  ${m.id}`);
-    }
+  // short-name fallback: match the part after '/'
+  const short = all.filter(p => p.id.split('/').pop() === key);
+
+  if (short.length === 1) return short[0];
+
+  if (short.length > 1) {
+    console.error(`ambiguous: "${name}" matches multiple plugins — use full key:`);
+    for (const m of short) console.error(`  ${m.id}`);
     process.exit(1);
   }
 
-  return matches[0] ?? null;
+  return null;
 }
