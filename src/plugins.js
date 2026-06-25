@@ -1,13 +1,33 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { PLUGINS_DIR, CONF_PATH } from './paths.js';
+import { parse as parseToml } from 'smol-toml';
+import { PLUGINS_DIR, CONF_PATH, TOML_PLUGIN_FILE } from './paths.js';
 
-// ------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // conf helpers
-// ------------------------------------------------------------
+//
+// Read precedence: TOML > legacy .conf  (mirrors config.js merge order)
+// Write target:   TOML if the file exists, otherwise legacy .conf
+//
+// Once the user has run `manyplug migrate-config`, only TOML_PLUGIN_FILE
+// exists and .conf is never touched again.
+// ---------------------------------------------------------------------------
 
 export function readEnabled() {
+	// -- TOML (preferred) --
+	if (existsSync(TOML_PLUGIN_FILE)) {
+		try {
+			const raw     = readFileSync(TOML_PLUGIN_FILE, 'utf-8');
+			const parsed  = parseToml(raw);
+			const plugins = Array.isArray(parsed.PLUGINS) ? parsed.PLUGINS : [];
+			return new Set(plugins.map(p => String(p).toLowerCase()).filter(Boolean));
+		} catch {
+			// corrupted TOML — fall through to legacy so the CLI doesn't brick
+		}
+	}
+
+	// -- legacy .conf fallback (frozen) --
 	if (!existsSync(CONF_PATH)) return new Set();
 	const match = readFileSync(CONF_PATH, 'utf-8').match(/PLUGINS=\[\s*([\s\S]*?)\s*\]/);
 	if (!match) return new Set();
@@ -15,7 +35,20 @@ export function readEnabled() {
 }
 
 export async function writeEnabled(plugins) {
-	await fs.writeFile(CONF_PATH, `PLUGINS=[\n${plugins.map(p => p + ',').join('\n')}\n]\n`, 'utf-8');
+	if (existsSync(TOML_PLUGIN_FILE)) {
+		// Overwrite, preserving only the canonical header.
+		// manyplug.toml is a managed file — user edits go above PLUGINS.
+		const items   = plugins.map(p => `"${p}"`).join(', ');
+		const content = `# ManyPlug plugin list — managed by manyplug\n\nPLUGINS = [${items}]\n`;
+		await fs.writeFile(TOML_PLUGIN_FILE, content, 'utf-8');
+	} else {
+		// Legacy .conf — keep format identical for parser compatibility
+		await fs.writeFile(
+			CONF_PATH,
+			`PLUGINS=[\n${plugins.map(p => p + ',').join('\n')}\n]\n`,
+			'utf-8',
+		);
+	}
 }
 
 // ------------------------------------------------------------
