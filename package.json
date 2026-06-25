@@ -1,6 +1,6 @@
 {
   "name": "@manybot/manyplug",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "CLI plugin manager for ManyBot",
   "man": [
     "docs/manyplug.1"
