@@ -15,7 +15,7 @@ export async function listCommand(options = {}) {
 
 	// column widths
 	const w = {
-    name: Math.max(4, ...plugins.map(p => (p.manifest.key || p.name).length)),
+    name: Math.max(4, ...plugins.map(p => (p.manifest.key || p.id).length)),
 		version:  Math.max(7, ...plugins.map(p => (p.manifest.version || '-').length)),
 		category: Math.max(8, ...plugins.map(p => (p.manifest.category || '-').length)),
 	};
@@ -26,7 +26,7 @@ export async function listCommand(options = {}) {
 	console.log('  ' + '-'.repeat(header.length - 2));
 
 	for (const p of plugins) {
-    const displayName = p.manifest.key || p.name;
+    const displayName = p.manifest.key || p.id;
 		const flag    = p._error ? '!' : ' ';
 		const type    = p.manifest.service ? 'svc' : 'std';
 		const status  = !p.hasEntry ? 'incomplete' : p.isEnabled ? 'enabled' : 'disabled';
