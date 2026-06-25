@@ -1,19 +1,16 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { execSync } from 'node:child_process';
+import readline from 'node:readline';
 import { formatSize } from './ui.js';
 import { loadLocalRegistry, saveRegistry, fetchRemoteRegistry } from './registry-ops.js';
-import { getDirSize, installPluginFromRepo, installPluginFromTarball, installNpmDeps } from './utils.js';
-import { PLUGINS_DIR } from './paths.js';
+import { getDirSize, installPluginFromTarball, installNpmDeps } from './utils.js';
+import { PLUGINS_DIR, DATA_DIR } from './paths.js';
 import { discoverPlugins } from './plugins.js';
 
 // ------------------------------------------------------------
 // helpers
 // ------------------------------------------------------------
-
-function isNewFormat(entry) {
-	return !!entry.repos;
-}
 
 function shortName(pluginName) {
 	return pluginName.includes('/') ? pluginName.split('/').pop() : pluginName;
@@ -61,7 +58,7 @@ async function registerPlugin(pluginName, manifest, extra = {}) {
 // install from local path
 // ------------------------------------------------------------
 
-async function installFromLocal(sourcePath) {
+async function installFromLocal(sourcePath, options = {}) {
 	const src = path.resolve(sourcePath);
 
 	if (!await fs.pathExists(src))
@@ -75,35 +72,44 @@ async function installFromLocal(sourcePath) {
 	try { manifest = await fs.readJson(manifestPath); }
 	catch (e) { return { success: false, error: `invalid manyplug.json: ${e.message}` }; }
 
-	const name = manifest.name || path.basename(src);
-	const dest = path.join(PLUGINS_DIR, name);
+	const pluginName = manifest.name || path.basename(src);
 
-  // checa conflito
-  const discovered = await discoverPlugins();
-  const conflict = discovered.find(d => d.manifest.name === name && d.manifest.key !== manifest.key);
-  if (conflict) {
-    return { 
-      success: false, 
-      error: `conflict: "${name}" already installed as ${conflict.manifest.key || conflict.manifest.name}\n  use 'manyplug remove ${conflict.manifest.key || conflict.manifest.name}' first`
-    };
-  }
+	// resolve dest: prefer key from manifest, fallback to manydev/<name>
+	let destKey;
+	if (manifest.key) {
+		destKey = manifest.key;
+	} else {
+		destKey = `manydev/${pluginName}`;
+		console.warn(`warn: no key in manyplug.json — installing as ${destKey}`);
+		console.warn(`  hint: add "key": "yourname/${pluginName}" to manyplug.json`);
+	}
 
+	const dest = path.join(PLUGINS_DIR, destKey);
 
-	if (await fs.pathExists(dest))
-		return { success: false, error: `${name} already installed` };
+	// reinstall: wipe existing install silently (dev workflow friendly)
+	if (await fs.pathExists(dest)) {
+		if (options.force) {
+			await fs.remove(dest);
+		} else {
+			// still reinstall, just let the user know
+			console.log(`~ ${destKey} already installed, reinstalling...`);
+			await fs.remove(dest);
+		}
+	}
 
 	const size = await getDirSize(src);
-	console.log(`installing ${name}  src=${src}  size=${formatSize(size)}`);
+	console.log(`installing ${destKey}  src=${src}  size=${formatSize(size)}`);
 	reportExternalDeps(manifest);
 
 	try {
-		await fs.ensureDir(PLUGINS_DIR);
+		await fs.ensureDir(path.dirname(dest));
 		await fs.copy(src, dest);
+		await fs.ensureDir(path.join(DATA_DIR, destKey));
 		await installDeps(manifest, dest);
-		await registerPlugin(name, manifest, { local: true });
-		return { success: true, plugin: name, size };
+		await registerPlugin(destKey, { ...manifest, key: manifest.key || destKey, local: true });
+		return { success: true, plugin: destKey, size };
 	} catch (e) {
-		return { success: false, error: e.message, plugin: name };
+		return { success: false, error: e.message, plugin: destKey };
 	}
 }
 
@@ -111,29 +117,21 @@ async function installFromLocal(sourcePath) {
 // install single plugin from remote registry
 // ------------------------------------------------------------
 
-async function installFromRegistry(pluginName, manifest, mirror, branch) {
+async function installFromRegistry(pluginName, manifest, branch) {
 	const t    = Date.now();
 	const name = shortName(pluginName);
-	const dest = path.join(PLUGINS_DIR, name);
+
+	if (!manifest.repos)
+		return { success: false, error: `no repos defined for ${pluginName}`, plugin: name };
 
 	try {
-		let size;
-
-		if (isNewFormat(manifest)) {
-			const result = await installPluginFromTarball({ name, repos: manifest.repos, branch: branch }, PLUGINS_DIR);
-			size = result.size;
-			reportExternalDeps(result.manifest);
-			await installDeps(result.manifest, result.finalPath);
-			await registerPlugin(result.manifest.key || result.manifest.name, result.manifest);
-		} else {
-			console.warn('warning: installing from manyplug-repo is deprecated. use \'install user/plugin\' instead.');
-			const r = await installPluginFromRepo({ plugin: pluginName, repo: mirror }, PLUGINS_DIR);
-			size = r.size;
-			await installDeps(manifest, dest);
-			await registerPlugin(name, manifest);
-		}
-
-		return { success: true, plugin: name, size, duration: Date.now() - t };
+		const result = await installPluginFromTarball({ name, repos: manifest.repos, branch }, PLUGINS_DIR);
+		const dataKey = result.manifest.key || result.manifest.name;
+		reportExternalDeps(result.manifest);
+		await installDeps(result.manifest, result.finalPath);
+		await fs.ensureDir(path.join(DATA_DIR, dataKey));
+		await registerPlugin(dataKey, result.manifest);
+		return { success: true, plugin: name, size: result.size, duration: Date.now() - t };
 	} catch (e) {
 		return { success: false, error: e.message, plugin: name };
 	}
@@ -151,67 +149,82 @@ export async function installCommand(pluginsInput, options = {}) {
 
 	// -- local install --
 	if (options.local) {
-		const r = await installFromLocal(options.local);
+		const r = await installFromLocal(options.local, options);
 		if (!r.success) { console.error(r.error); process.exit(1); }
 		console.log(`installed ${r.plugin}  size=${formatSize(r.size)}  time=${elapsed(t)}s`);
+
+		if (options.watch) {
+			const src = path.resolve(options.local);
+			console.log(`watching ${src} ...`);
+			let debounce = null;
+			fs.watch(src, { recursive: true }, (event, filename) => {
+				if (filename?.includes('node_modules')) return;
+				clearTimeout(debounce);
+				debounce = setTimeout(async () => {
+					process.stdout.write(`  ${filename} changed, reinstalling... `);
+					const rw = await installFromLocal(options.local, { ...options, force: true });
+					console.log(rw.success ? `ok (${formatSize(rw.size)})` : `FAILED: ${rw.error}`);
+				}, 300);
+			});
+			await new Promise(() => {}); // keep alive
+		}
+
 		return;
 	}
 
 	if (!names.length) { console.error('usage: manyplug install <plugin>'); process.exit(1); }
 
 	// -- fetch remote registry --
-	let remoteRegistry, mirror;
+	let remoteRegistry;
 	try {
-		({ remoteRegistry, selectedMirror: mirror } = await fetchRemoteRegistry());
-		mirror = mirror.git;
+		remoteRegistry = await fetchRemoteRegistry();
 	} catch (e) {
 		console.error(`failed: ${e.message}`);
 		process.exit(1);
 	}
 
 	// -- classify plugins --
-	const toInstall = [], toReinstall = [], notFound = [];
+	const queue = [], notFound = [];
 
 	for (const name of names) {
 		const manifest = remoteRegistry.plugins[name];
 		if (!manifest) { notFound.push(name); continue; }
-
-		const sn        = shortName(name);
-		const installed = await fs.pathExists(path.join(PLUGINS_DIR, sn));
-		const entry     = { name, version: manifest.version, manifest };
-
-		if (installed && !options.needed) toReinstall.push(entry);
-		else if (!installed)              toInstall.push(entry);
+		queue.push({ name, version: manifest.version, manifest });
 	}
 
 	if (notFound.length) console.error(`not found: ${notFound.join(', ')}`);
-
-	const queue = [...toInstall, ...toReinstall];
 	if (!queue.length) { console.log('nothing to do'); process.exit(0); }
 
-  // --- check conflicts ---
-  const discovered = await discoverPlugins();
-  for (const p of toInstall) {
-    const sn = shortName(p.name);
-    const conflict = discovered.find(d => d.manifest.name === sn && d.manifest.key !== p.name);
-    if (conflict) {
-      console.error(`conflict: "${sn}" already installed as ${conflict.manifest.key || conflict.manifest.name}`);
-      console.error(`  use 'manyplug remove ${conflict.manifest.key || conflict.manifest.name}' first`);
-      process.exit(1);
-    }
-  }
-
-	// -- print plan --
-	for (const p of toInstall)   console.log(`+ ${p.name}@${p.version ?? 'new'}`);
-	for (const p of toReinstall) console.log(`~ ${p.name}@${p.version ?? 'new'} (reinstall)`);
-
-	// -- remove stale installs --
-	for (const p of toReinstall) {
+	// -- check conflicts (different plugin, same short name) --
+	const discovered = await discoverPlugins();
+	for (const p of queue) {
 		const sn = shortName(p.name);
-		await fs.remove(path.join(PLUGINS_DIR, sn));
-		const registry = await loadLocalRegistry();
-		delete registry.plugins[sn];
-		await saveRegistry(registry);
+		const conflict = discovered.find(d =>
+			d.manifest.name === sn &&
+			d.manifest.key  !== p.name &&
+			!d.manifest.local
+		);
+		if (conflict) {
+			console.error(`conflict: "${sn}" already installed as ${conflict.manifest.key || conflict.manifest.name}`);
+			console.error(`  use 'manyplug remove ${conflict.manifest.key || conflict.manifest.name}' first`);
+			process.exit(1);
+		}
+	}
+
+	// -- print plan + wipe existing --
+	for (const p of queue) {
+		const existing = discovered.find(d =>
+			d.manifest.key === p.name || d.manifest.name === shortName(p.name)
+		);
+		console.log(`${existing ? '~' : '+'} ${p.name}@${p.version ?? 'new'}${existing ? ' (reinstall)' : ''}`);
+		if (existing) {
+			await fs.remove(existing.dir);
+			const registry = await loadLocalRegistry();
+			const regKey = Object.keys(registry.plugins || {}).find(k =>
+				k === p.name || k.split('/').pop() === shortName(p.name)
+			);
+			if (regKey) { delete registry.plugins[regKey]; await saveRegistry(registry); }
+		}
 	}
 
 
@@ -219,7 +232,7 @@ export async function installCommand(pluginsInput, options = {}) {
 	const results = [];
 	for (const p of queue) {
 		process.stdout.write(`installing ${p.name}... `);
-		const r = await installFromRegistry(p.name, p.manifest, mirror, options.branch);
+		const r = await installFromRegistry(p.name, p.manifest, options.branch);
 		results.push(r);
 		console.log(r.success ? 'done' : `FAILED${r.error ? ': ' + r.error : ''}`);
 	}
@@ -250,11 +263,20 @@ export async function updateCommand(options = {}) {
   if (!names.length) { console.log('nothing to update'); return; }
 
   if (!options.yes) {
-    process.stdout.write(`update ${names.length} plugin(s)? [y/N] `);
-    const answer = await new Promise(res =>
-      process.stdin.once('data', d => res(d.toString().trim().toLowerCase()))
-    );
-    process.stdin.destroy();
+    const answer = await new Promise(res => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: false
+      });
+
+      process.stdout.write(`update ${names.length} plugin(s)? [y/N] `);
+
+      rl.once('line', line => {
+        rl.close();
+        res(line.trim().toLowerCase());
+      });
+    });
     if (answer !== 'y') { console.log('cancelled'); process.exit(0); }
   }
 
