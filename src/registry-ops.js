@@ -1,20 +1,7 @@
 import fs from 'fs-extra';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { REGISTRY_PATH } from './paths.js';
 
-import { REGISTRY_PATH } from "./paths.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH   = path.join(__dirname, '..', 'config.json');
-
-// ------------------------------------------------------------
-
-function loadConfig() {
-	try { return fs.readJsonSync(CONFIG_PATH); }
-	catch (e) { console.error(`error: config.json: ${e.message}`); process.exit(1); }
-}
-
-export const MIRRORS = loadConfig().mirrors;
+const MPINDEX_URL = 'https://manybot.stxerr.dev/manyplug/mpindex.json';
 
 // ------------------------------------------------------------
 
@@ -30,24 +17,36 @@ export async function saveRegistry(registry) {
 
 // ------------------------------------------------------------
 
-export async function fetchRemoteRegistry() {
-	for (const mirror of MIRRORS) {
-		try {
-			const [regRes, idxRes] = await Promise.all([
-				fetch(`${mirror.fetch}/registry.json`),
-				fetch(`https://manybot.stxerr.dev/manyplug/mpindex.json`),
-			]);
-			if (!regRes.ok && !idxRes.ok)
-				throw new Error(`HTTP ${regRes.status} / ${idxRes.status}`);
-			const legacy = regRes.ok ? await regRes.json() : { plugins: {} };
-			const fresh  = idxRes.ok ? await idxRes.json() : { plugins: {} };
-			return {
-				remoteRegistry: { plugins: { ...legacy.plugins, ...fresh.plugins } },
-				selectedMirror: mirror,
-			};
-		} catch (e) {
-			// mirror falhou, tenta o próximo
-		}
+async function fetchVersion(manifestUrl) {
+	try {
+		const res = await fetch(manifestUrl);
+		if (!res.ok) return null;
+		const m = await res.json();
+		return m?.version ?? null;
+	} catch {
+		return null;
 	}
-	throw new Error('all mirrors failed');
+}
+
+export async function fetchRemoteRegistry() {
+	let res;
+	try {
+		res = await fetch(MPINDEX_URL);
+	} catch (e) {
+		throw new Error(`network error: ${e.message}`);
+	}
+	if (!res.ok) throw new Error(`HTTP ${res.status} fetching mpindex`);
+	const index = await res.json();
+	if (!index?.plugins) throw new Error('invalid mpindex: missing plugins field');
+
+	// fetch all manifest versions in parallel
+	const entries = Object.entries(index.plugins);
+	const versions = await Promise.all(
+		entries.map(([, entry]) => entry.manifest ? fetchVersion(entry.manifest) : null)
+	);
+	for (let i = 0; i < entries.length; i++) {
+		if (versions[i] != null) entries[i][1].version = versions[i];
+	}
+
+	return index;
 }
