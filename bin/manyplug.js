@@ -3,11 +3,13 @@
 import { program } from 'commander';
 import { createRequire } from 'module';
 import { installCommand, updateCommand } from '../src/install.js';
-import { listCommand }                  from '../src/list.js';
-import { removeCommand }                from '../src/remove.js';
+import { listCommand }                   from '../src/list.js';
+import { removeCommand }                 from '../src/remove.js';
 import { enableCommand, disableCommand } from '../src/enable.js';
-import { initCommand }                  from '../src/init.js';
-import { validateCommand }              from '../src/validate.js';
+import { initCommand }                   from '../src/init.js';
+import { validateCommand }               from '../src/validate.js';
+import { infoCommand }                   from '../src/info.js';
+import { versionCommand }                from '../src/version.js';
 
 const pkg = createRequire(import.meta.url)('../package.json');
 
@@ -17,9 +19,9 @@ const pkg = createRequire(import.meta.url)('../package.json');
 
 function printHelp(cmd) {
 	if (!cmd) {
-		console.log(`manyplug ${pkg.version} — plugin manager for ManyBot`);
+		console.log(`manyplug ${pkg.version} - plugin manager for ManyBot`);
 		console.log('https://git.stxerr.dev/manyplug.git\n');
-		console.log('commands: init install update remove list enable disable validate');
+		console.log('commands: init install update remove list enable disable validate version info');
 		console.log('options:  -v/--version  help <command>');
 		return;
 	}
@@ -62,10 +64,10 @@ program.command('init [name]').description('create new plugin boilerplate')
 	.action(initCommand);
 
 program.command('install [plugins...]').description('install plugins from registry or local path')
-	.option('-l, --local <path>',   'install from local path')
+	.option('-l, --local <path>',    'install from local path')
+	.option('-w, --watch',           'watch for changes and reinstall (requires --local)')
 	.option('-b, --branch <branch>', 'install from a specific branch')
 	.option('-y, --yes',             'skip confirmation')
-	.option('--needed',              'skip already installed plugins')
 	.action(installCommand);
 
 program.command('update').description('reinstall all non-local plugins')
@@ -73,9 +75,9 @@ program.command('update').description('reinstall all non-local plugins')
 	.action(updateCommand);
 
 program.command('remove [plugins...]').alias('rm').description('remove installed plugins')
-	.option('-y, --yes',          'skip confirmation')
-	.option('--remove-deps',      'also uninstall npm dependencies')
-	.action(removeCommand);
+	.option('-y, --yes', 'skip confirmation')
+	.option('-Y', 'skip confirmation even for plugin data')
+  .action(removeCommand);
 
 program.command('list').alias('ls').description('list installed plugins (enabled only by default)')
 	.option('-a, --all', 'include disabled plugins')
@@ -89,6 +91,12 @@ program.command('disable [plugins...]').description('disable plugins')
 
 program.command('validate [path]').alias('val').description('validate manyplug.json')
 	.action(validateCommand);
+
+program.command('version [version]').description('apply a version to your plugin manifest (it can be any string)')
+	.action(versionCommand);
+
+program.command('info <plugin>').description('show information about an installed plugin')
+	.action(infoCommand);
 
 // ------------------------------------------------------------
 
