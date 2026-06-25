@@ -15,52 +15,52 @@ const getId = (manifest, dir) =>
 // conf helpers
 // ------------------------------------------------------------
 
+function parseConf() {
+  if (!existsSync(CONF_PATH)) return null;
+  const match = readFileSync(CONF_PATH, 'utf-8')
+    .match(/PLUGINS=\[\s*([\s\S]*?)\s*\]/);
+  if (!match) return null;
+  return match[1]
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function readEnabled() {
   if (existsSync(TOML_PLUGIN_FILE)) {
     try {
-      const raw = readFileSync(TOML_PLUGIN_FILE, 'utf-8');
+      const raw    = readFileSync(TOML_PLUGIN_FILE, 'utf-8');
       const parsed = parseToml(raw);
       const plugins = Array.isArray(parsed.PLUGINS) ? parsed.PLUGINS : [];
       return new Set(plugins.map(p => String(p).toLowerCase()).filter(Boolean));
     } catch {
-      // fallback legacy
+      // fall through to conf migration
     }
   }
 
-  if (!existsSync(CONF_PATH)) return new Set();
+  // migrate .conf → .toml
+  const legacy = parseConf();
+  if (legacy) {
+    console.warn('warn: migrating manyplug.conf → manyplug.toml');
+    const items   = legacy.map(p => `"${p}"`).join(', ');
+    const content = `# ManyPlug plugin list — managed by manyplug\n\nPLUGINS = [${items}]\n`;
+    try {
+      fs.writeFileSync(TOML_PLUGIN_FILE, content, 'utf-8');
+      fs.removeSync(CONF_PATH);
+      console.warn('warn: manyplug.conf removed');
+    } catch (e) {
+      console.warn(`warn: migration failed: ${e.message}`);
+    }
+    return new Set(legacy);
+  }
 
-  const match = readFileSync(CONF_PATH, 'utf-8')
-    .match(/PLUGINS=\[\s*([\s\S]*?)\s*\]/);
-
-  if (!match) return new Set();
-
-  return new Set(
-    match[1]
-      .split(',')
-      .map(s => s.trim().toLowerCase())
-      .filter(Boolean)
-  );
+  return new Set();
 }
 
 export async function writeEnabled(plugins) {
-  if (existsSync(TOML_PLUGIN_FILE)) {
-    const items = plugins.map(p => `"${p}"`).join(', ');
-    const content =
-`# ManyPlug plugin list — managed by manyplug
-
-PLUGINS = [${items}]
-`;
-    await fs.writeFile(TOML_PLUGIN_FILE, content, 'utf-8');
-  } else {
-    await fs.writeFile(
-      CONF_PATH,
-`PLUGINS=[
-${plugins.map(p => p + ',').join('\n')}
-]
-`,
-      'utf-8'
-    );
-  }
+  const items   = plugins.map(p => `"${p}"`).join(', ');
+  const content = `# ManyPlug plugin list — managed by manyplug\n\nPLUGINS = [${items}]\n`;
+  await fs.writeFile(TOML_PLUGIN_FILE, content, 'utf-8');
 }
 
 // ------------------------------------------------------------
