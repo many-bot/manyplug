@@ -1,5 +1,3 @@
-import fs from 'fs-extra';
-import { PLUGINS_DIR, CONF_PATH } from './paths.js';
 import { readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
 
 // ------------------------------------------------------------
@@ -18,16 +16,23 @@ async function toggle(names, action) {
 	const results = [];
 
 	for (const name of names) {
-		if (action === 'enable') {
-			const found = await resolvePlugin(name);
-			if (!found) {
-				console.error(`x ${name}: not installed`);
-				results.push({ name, changed: false, notFound: true });
-				continue;
-			}
+		const found = await resolvePlugin(name);
+
+		if (action === 'enable' && !found) {
+			console.error(`x ${name}: not installed`);
+			results.push({ name, changed: false, notFound: true });
+			continue;
 		}
-		const key     = name.toLowerCase();
-		const was     = set.has(key);
+
+		// Always use the canonical key from the manifest so the enabled list
+		// stays consistent regardless of how the user addressed the plugin.
+		// Falls back to the user-supplied name only when the plugin isn't
+		// installed (disable of an unknown key is a no-op, not an error).
+		const key = found
+			? (found.manifest.key || found.manifest.name).toLowerCase()
+			: name.toLowerCase();
+
+		const was = set.has(key);
 		if (action === 'enable') set.add(key);
 		else                     set.delete(key);
 		const changed = set.has(key) !== was;
