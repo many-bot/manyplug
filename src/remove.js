@@ -1,10 +1,11 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { exec } from 'node:child_process';
+import readline from 'node:readline';
 import { formatSize } from './ui.js';
 import { loadLocalRegistry, saveRegistry } from './registry-ops.js';
 import { readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
-import readline from 'node:readline';
+import { DATA_DIR } from './paths.js';
 
 // ------------------------------------------------------------
 // ------------------------------------------------------------
@@ -27,25 +28,13 @@ async function getDirSize(dir) {
 	return total;
 }
 
-let lineIterator = null;
-
-function getLineIterator() {
-  if (!lineIterator) {
-    const rl = readline.createInterface({ input: process.stdin, terminal: false });
-    lineIterator = rl[Symbol.asyncIterator]();
-  }
-  return lineIterator;
-}
-
-async function ask(prompt) {
-  process.stdout.write(prompt);
-  const iter = getLineIterator();
-  const { value } = await iter.next();
-  return (value ?? '').trim().toLowerCase();
-}
-
-function closeRL() {
-  lineIterator = null;
+function ask(prompt) {
+  return new Promise(res => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+    process.stdout.write(prompt);
+    rl.once('line', line => { rl.close(); res(line.trim().toLowerCase()); });
+    rl.once('close', () => res(''));
+  });
 }
 
 // ------------------------------------------------------------
@@ -65,12 +54,12 @@ export async function removeCommand(input, options = {}) {
 		if (!found) {
 			console.error(`x ${name}: not installed`);
 			results.push({ name, success: false });
-			continue;                          // ← sem destroy aqui
+			continue;
 		}
 		const { dir, manifest } = found;
-		const size = await getDirSize(dir);
+		let size = await getDirSize(dir);
 		console.log(`- ${found.name}@${manifest.version || '?'}  size=${formatSize(size)}  path=${path.relative(process.cwd(), dir)}`);
-		if (!options.yes) {
+		if (!options.yes && !options.Y) {
 			const answer = await ask('remove? [y/N] ');
 			if (answer !== 'y') {
 				console.log('  skipped');
@@ -85,7 +74,7 @@ export async function removeCommand(input, options = {}) {
 			const keyFull   = found.manifest.key?.toLowerCase();
 			if (set.has(keySimple)) set.delete(keySimple);
 			if (keyFull && set.has(keyFull)) set.delete(keyFull);
-			if (set.size !== enabled.length) {
+			if (set.size !== enabled.size) {
 				await writeEnabled([...set]);
 				console.log(`  disabled ${found.manifest.key || found.name}`);
 			}
@@ -98,6 +87,28 @@ export async function removeCommand(input, options = {}) {
 				delete registry.plugins[regKey];
 				await saveRegistry(registry);
 			}
+
+			// offer to remove data dir
+			const dataKey  = found.manifest.key || found.name;
+			const dataPath = path.join(DATA_DIR, dataKey);
+			if (await fs.pathExists(dataPath)) {
+				const dataSize = await getDirSize(dataPath);
+				if (options.Y) {
+					await fs.remove(dataPath);
+					size += dataSize;
+					console.log(`  removed data  freed=${formatSize(dataSize)}`);
+				} else {
+					const rmData = await ask(`  remove data too? (${formatSize(dataSize)}) [y/N] `);
+					if (rmData === 'y') {
+						await fs.remove(dataPath);
+						size += dataSize;
+						console.log(`  removed data`);
+					} else {
+						console.log(`  kept data`);
+					}
+				}
+			}
+
 			console.log(`  done  freed=${formatSize(size)}`);
 			results.push({ name, success: true, size });
 		} catch (e) {
@@ -105,8 +116,6 @@ export async function removeCommand(input, options = {}) {
 			results.push({ name, success: false, error: e.message });
 		}
 	}
-
-  closeRL();
 
 	const ok    = results.filter(r => r.success).length;
 	const bad   = results.length - ok;
