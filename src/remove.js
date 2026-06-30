@@ -8,8 +8,8 @@ import { readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
 import { DATA_DIR } from './paths.js';
 
 // ------------------------------------------------------------
-// ------------------------------------------------------------
 // helpers
+// ------------------------------------------------------------
 
 function elapsed(since) { return ((Date.now() - since) / 1000).toFixed(2); }
 
@@ -32,9 +32,23 @@ function ask(prompt) {
   return new Promise(res => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
     process.stdout.write(prompt);
-    rl.once('line', line => { rl.close(); res(line.trim().toLowerCase()); });
-    rl.once('close', () => res(''));
+    rl.once('line', line => { rl.close(); res(line.trim()?.toLowerCase()); });
   });
+}
+
+export function normalizeManifest(manifest) {
+	if (!manifest?.name) throw new Error("invalid manifest: missing name");
+
+	const key =
+		typeof manifest.key === "string" && /^[a-z0-9_-]+\/[a-z0-9_-]+$/i.test(manifest.key)
+			? manifest.key
+			: `manydev/${manifest.name}`;
+
+	return {
+		...manifest,
+		name: manifest.name,
+		key
+	};
 }
 
 // ------------------------------------------------------------
@@ -57,6 +71,11 @@ export async function removeCommand(input, options = {}) {
 			continue;
 		}
 		const { dir, manifest } = found;
+    if (!dir || typeof dir !== "string") {
+      console.error(`  FAILED: invalid plugin dir for ${name}`);
+	    results.push({ name, success: false });
+	    continue;
+    }
 		let size = await getDirSize(dir);
 		console.log(`- ${found.name}@${manifest.version || '?'}  size=${formatSize(size)}  path=${path.relative(process.cwd(), dir)}`);
 		if (!options.yes && !options.Y) {
@@ -70,7 +89,7 @@ export async function removeCommand(input, options = {}) {
 		try {
 			const enabled   = readEnabled();
 			const set       = new Set(enabled);
-			const keySimple = found.name.toLowerCase();
+      const keySimple = found.name?.toLowerCase();
 			const keyFull   = found.manifest.key?.toLowerCase();
 			if (set.has(keySimple)) set.delete(keySimple);
 			if (keyFull && set.has(keyFull)) set.delete(keyFull);
