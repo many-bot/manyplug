@@ -1,9 +1,12 @@
 import path from 'path';
+import fs from 'fs-extra';
+import chalk from 'chalk';
 import { resolvePlugin } from './plugins.js';
-import { PLUGINS_DIR, DATA_DIR } from './paths.js';
+import { DATA_DIR } from './paths.js';
 import { getDirSize } from './utils.js';
 import { formatSize } from './ui.js';
-import fs from 'fs-extra';
+import { log } from './logger.js';
+import { t } from './i18n.js';
 
 // ------------------------------------------------------------
 // info command
@@ -11,17 +14,17 @@ import fs from 'fs-extra';
 
 export async function infoCommand(name) {
 	if (!name) {
-		console.error('usage: manyplug info <plugin>');
+		log.error(t('info.usage'));
 		process.exit(1);
 	}
 
 	const found = await resolvePlugin(name);
 	if (!found) {
-		console.error(`x ${name}: not installed`);
+		log.itemFail(t('common.notInstalled', { name }));
 		process.exit(1);
 	}
 
-	const { dir, manifest, isEnabled, hasEntry, _error } = found;
+	const { dir, manifest, isEnabled, hasEntry, error } = found;
 	const m = manifest;
 
 	const pluginSize = await getDirSize(dir);
@@ -31,53 +34,54 @@ export async function infoCommand(name) {
 	const hasData  = await fs.pathExists(dataPath);
 	const dataSize = hasData ? await getDirSize(dataPath) : 0;
 
-	const relDir  = path.relative(process.cwd(), dir);
-	const status  = !hasEntry ? 'incomplete' : isEnabled ? 'enabled' : 'disabled';
-	const type    = m.service ? 'service' : 'standard';
+	const relDir     = path.relative(process.cwd(), dir);
+	const statusText = !hasEntry ? t('list.statusIncomplete') : isEnabled ? t('list.statusEnabled') : t('list.statusDisabled');
+	const status     = !hasEntry ? chalk.yellow(statusText) : isEnabled ? chalk.green(statusText) : chalk.dim(statusText);
+	const type       = m.service ? t('info.typeService') : t('info.typeStandard');
 
-	console.log(`${m.key || m.name}@${m.version || '?'}`);
-	console.log('');
+	log.plain(chalk.bold(`${m.key || m.name}@${m.version || '?'}`));
+	log.plain('');
 
-	const row = (label, value) => console.log(`  ${label.padEnd(16)} ${value}`);
+	const row = (label, value) => log.plain(`  ${chalk.dim(label.padEnd(16))} ${value}`);
 
-	row('name',     m.name     || '-');
-	row('key',      m.key      || '-');
-	row('version',  m.version  || '-');
-	row('category', m.category || '-');
-	row('author',   typeof m.author === 'object' ? m.author.name : (m.author || '-'));
-	row('license',  m.license  || '-');
-  row('repo',     m.repo     || '-');
-	row('type',     type);
-	row('status',   status);
-	row('main',     m.main || 'index.js');
-	row('path',     relDir);
-	row('size',     formatSize(pluginSize));
-	row('data',     hasData ? `${dataPath}  (${formatSize(dataSize)})` : 'none');
+	row(t('info.rowName'),     m.name     || '-');
+	row(t('info.rowKey'),      m.key      || '-');
+	row(t('info.rowVersion'),  m.version  || '-');
+	row(t('info.rowCategory'), m.category || '-');
+	row(t('info.rowAuthor'),   typeof m.author === 'object' ? m.author.name : (m.author || '-'));
+	row(t('info.rowLicense'),  m.license  || '-');
+	row(t('info.rowRepo'),     m.repo     || '-');
+	row(t('info.rowType'),     type);
+	row(t('info.rowStatus'),   status);
+	row(t('info.rowMain'),     m.main || 'index.js');
+	row(t('info.rowPath'),     relDir);
+	row(t('info.rowSize'),     formatSize(pluginSize));
+	row(t('info.rowData'),     hasData ? `${dataPath}  (${formatSize(dataSize)})` : t('info.dataNone'));
 
 	if (m.description) {
-		console.log('');
-		console.log(`  ${m.description}`);
+		log.plain('');
+		log.plain(chalk.dim(`  ${m.description}`));
 	}
 
 	if (m.dependencies && Object.keys(m.dependencies).length) {
-		console.log('');
-		console.log('  dependencies:');
+		log.plain('');
+		log.plain(chalk.bold(`  ${t('info.depsHeader')}`));
 		for (const [dep, ver] of Object.entries(m.dependencies))
-			console.log(`    ${dep}@${ver}`);
+			log.plain(`    ${dep}${chalk.dim('@' + ver)}`);
 	}
 
 	if (m.externalDependencies && Object.keys(m.externalDependencies).length) {
-		console.log('');
-		console.log('  external deps:');
+		log.plain('');
+		log.plain(chalk.bold(`  ${t('info.extDepsHeader')}`));
 		for (const [dep, cfg] of Object.entries(m.externalDependencies)) {
 			const cmd = typeof cfg === 'string' ? cfg : cfg.command;
-			const opt = typeof cfg === 'object' && cfg.optional ? ' (optional)' : '';
-			console.log(`    ${dep}: ${cmd}${opt}`);
+			const opt = typeof cfg === 'object' && cfg.optional ? t('info.optionalSuffix') : '';
+			log.plain(`    ${dep}: ${cmd}${chalk.dim(opt)}`);
 		}
 	}
 
-	if (_error) {
-		console.log('');
-		console.warn('  warn: manyplug.json could not be parsed');
+	if (error) {
+		log.plain('');
+		log.warn(t('info.manifestParseWarn'));
 	}
 }

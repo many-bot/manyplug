@@ -1,8 +1,10 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { existsSync, readFileSync } from 'fs';
-import { parse as parseToml } from 'smol-toml';
-import { PLUGINS_DIR, CONF_PATH, TOML_PLUGIN_FILE } from './paths.js';
+import { PLUGINS_DIR } from './paths.js';
+import { readEnabledPlugins, writePlugins } from './config.js';
+import { loadLocalRegistry } from './registry-ops.js';
+import { log } from './logger.js';
+import { t } from './i18n.js';
 
 // ------------------------------------------------------------
 // canonical plugin id
@@ -11,70 +13,62 @@ import { PLUGINS_DIR, CONF_PATH, TOML_PLUGIN_FILE } from './paths.js';
 const getId = (manifest, dir) =>
   (manifest.key || manifest.name || dir).toLowerCase();
 
-// ------------------------------------------------------------
-// conf helpers
-// ------------------------------------------------------------
+// fields tracked only in registry.json (install-time metadata) — never
+// written into the plugin's own manyplug.json on disk, so discovery has
+// to merge them back in from the registry cache to make them visible
+const ENRICHMENT_FIELDS = ['local', 'linked', 'profile'];
 
-function parseConf() {
-  if (!existsSync(CONF_PATH)) return null;
-  const match = readFileSync(CONF_PATH, 'utf-8')
-    .match(/PLUGINS=\[\s*([\s\S]*?)\s*\]/);
-  if (!match) return null;
-  return match[1]
-    .split(',')
-    .map(s => s.trim().toLowerCase())
-    .filter(Boolean);
+function withEnrichment(manifest, registry) {
+  if (!registry?.plugins) return manifest;
+
+  const wantKey = (manifest.key || manifest.name || '').toLowerCase();
+  if (!wantKey) return manifest;
+
+  const cached = registry.plugins[manifest.key] || registry.plugins[manifest.name] ||
+    Object.entries(registry.plugins).find(([k]) => k.toLowerCase() === wantKey)?.[1];
+  if (!cached) return manifest;
+
+  const extra = {};
+  for (const f of ENRICHMENT_FIELDS) if (cached[f] !== undefined) extra[f] = cached[f];
+  return Object.keys(extra).length ? { ...manifest, ...extra } : manifest;
 }
 
+// ------------------------------------------------------------
+// enabled plugins list — thin re-exports over config.js, kept
+// here so the rest of the codebase doesn't need to know that
+// PLUGINS lives in the same file as user preferences
+// ------------------------------------------------------------
+
 export function readEnabled() {
-  if (existsSync(TOML_PLUGIN_FILE)) {
-    try {
-      const raw    = readFileSync(TOML_PLUGIN_FILE, 'utf-8');
-      const parsed = parseToml(raw);
-      const plugins = Array.isArray(parsed.PLUGINS) ? parsed.PLUGINS : [];
-      return new Set(plugins.map(p => String(p).toLowerCase()).filter(Boolean));
-    } catch {
-      // fall through to conf migration
-    }
-  }
-
-  // migrate .conf → .toml
-  const legacy = parseConf();
-  if (legacy) {
-    console.warn('warn: migrating manyplug.conf → manyplug.toml');
-    const items   = legacy.map(p => `"${p}"`).join(', ');
-    const content = `# ManyPlug plugin list — managed by manyplug\n\nPLUGINS = [${items}]\n`;
-    try {
-      fs.writeFileSync(TOML_PLUGIN_FILE, content, 'utf-8');
-      fs.removeSync(CONF_PATH);
-      console.warn('warn: manyplug.conf removed');
-    } catch (e) {
-      console.warn(`warn: migration failed: ${e.message}`);
-    }
-    return new Set(legacy);
-  }
-
-  return new Set();
+  return readEnabledPlugins();
 }
 
 export async function writeEnabled(plugins) {
-  const items   = plugins.map(p => `"${p}"`).join(', ');
-  const content = `# ManyPlug plugin list — managed by manyplug\n\nPLUGINS = [${items}]\n`;
-  await fs.writeFile(TOML_PLUGIN_FILE, content, 'utf-8');
+  await writePlugins(plugins);
 }
 
 // ------------------------------------------------------------
 // discovery
 // ------------------------------------------------------------
 
-async function findManifests(dir, enabled, depth = 0, maxDepth = 2) {
+async function isDirEntry(entry, fullPath) {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return (await fs.stat(fullPath)).isDirectory();
+  } catch {
+    return false; // broken symlink
+  }
+}
+
+async function findManifests(dir, enabled, registry, depth = 0, maxDepth = 2) {
   const results = [];
   if (!await fs.pathExists(dir)) return results;
 
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-
     const sub = path.join(dir, entry.name);
+    if (!await isDirEntry(entry, sub)) continue;
+
     const mp = path.join(sub, 'manyplug.json');
 
     if (await fs.pathExists(mp)) {
@@ -91,6 +85,8 @@ async function findManifests(dir, enabled, depth = 0, maxDepth = 2) {
           category: '?'
         };
       }
+
+      manifest = withEnrichment(manifest, registry);
 
       const id = getId(manifest, entry.name);
       const hasEntry = await fs.pathExists(
@@ -110,7 +106,7 @@ async function findManifests(dir, enabled, depth = 0, maxDepth = 2) {
 
     } else if (depth < maxDepth) {
       results.push(
-        ...await findManifests(sub, enabled, depth + 1, maxDepth)
+        ...await findManifests(sub, enabled, registry, depth + 1, maxDepth)
       );
     }
   }
@@ -119,13 +115,35 @@ async function findManifests(dir, enabled, depth = 0, maxDepth = 2) {
 }
 
 export async function discoverPlugins() {
-  const enabled = readEnabled();
-  return findManifests(PLUGINS_DIR, enabled);
+  const enabled  = readEnabled();
+  const registry = await loadLocalRegistry();
+  return findManifests(PLUGINS_DIR, enabled, registry);
 }
 
 // ------------------------------------------------------------
 // resolve plugin
 // ------------------------------------------------------------
+
+export async function resolveProfile(name) {
+  const all = await discoverPlugins();
+  const key = name.toLowerCase();
+
+  const taggedWith = (profileKey) =>
+    all.filter(p => (p.manifest.profile || '').toLowerCase() === profileKey.toLowerCase());
+
+  // exact profile key match
+  const exact = taggedWith(name);
+  if (exact.length) return { key: name, members: exact };
+
+  // short-name fallback: match the part after '/' among profile keys in use
+  const profileKeys = [...new Set(all.map(p => p.manifest.profile).filter(Boolean))];
+  const short = profileKeys.filter(pk => pk.split('/').pop().toLowerCase() === key);
+
+  if (short.length === 1) return { key: short[0], members: taggedWith(short[0]) };
+  if (short.length > 1) return { ambiguous: short };
+
+  return null;
+}
 
 export async function resolvePlugin(name) {
   const all  = await discoverPlugins();
@@ -141,7 +159,7 @@ export async function resolvePlugin(name) {
   if (short.length === 1) return short[0];
 
   if (short.length > 1) {
-    console.error(`ambiguous: "${name}" matches multiple plugins — use full key:`);
+    log.error(t('common.ambiguous', { name }));
     for (const m of short) console.error(`  ${m.id}`);
     process.exit(1);
   }

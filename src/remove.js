@@ -1,106 +1,77 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { exec } from 'node:child_process';
-import readline from 'node:readline';
 import { formatSize } from './ui.js';
+import { confirm } from './ui.js';
+import { log } from './logger.js';
+import { t } from './i18n.js';
 import { loadLocalRegistry, saveRegistry } from './registry-ops.js';
 import { readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
+import { getDirSize } from './utils.js';
+import { getPreference } from './config.js';
 import { DATA_DIR } from './paths.js';
 
-// ------------------------------------------------------------
-// helpers
-// ------------------------------------------------------------
-
 function elapsed(since) { return ((Date.now() - since) / 1000).toFixed(2); }
-
-function run(cmd, cwd) {
-	return new Promise((res, rej) =>
-		exec(cmd, { cwd }, (err, stdout) => err ? rej(err) : res(stdout))
-	);
-}
-
-async function getDirSize(dir) {
-	let total = 0;
-	for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-		const p = path.join(dir, entry.name);
-		total += entry.isDirectory() ? await getDirSize(p) : (await fs.stat(p)).size;
-	}
-	return total;
-}
-
-function ask(prompt) {
-  return new Promise(res => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
-    process.stdout.write(prompt);
-    rl.once('line', line => { rl.close(); res(line.trim()?.toLowerCase()); });
-  });
-}
-
-export function normalizeManifest(manifest) {
-	if (!manifest?.name) throw new Error("invalid manifest: missing name");
-
-	const key =
-		typeof manifest.key === "string" && /^[a-z0-9_-]+\/[a-z0-9_-]+$/i.test(manifest.key)
-			? manifest.key
-			: `manydev/${manifest.name}`;
-
-	return {
-		...manifest,
-		name: manifest.name,
-		key
-	};
-}
 
 // ------------------------------------------------------------
 // remove command
 // ------------------------------------------------------------
 
 export async function removeCommand(input, options = {}) {
-	const t     = Date.now();
+	const t0    = Date.now();
 	const names = Array.isArray(input) ? input : (input ? [input] : []);
+
 	if (!names.length) {
-		console.error('usage: manyplug remove <plugin> [plugin2...]');
+		log.error(t('remove.usage'));
 		process.exit(1);
 	}
+
+	const skipConfirm = options.yes || options.Y || !getPreference('CONFIRM', true);
+
 	const results = [];
 	for (const name of names) {
 		const found = await resolvePlugin(name);
 		if (!found) {
-			console.error(`x ${name}: not installed`);
+			log.itemFail(t('common.notInstalled', { name }));
 			results.push({ name, success: false });
 			continue;
 		}
+
 		const { dir, manifest } = found;
-    if (!dir || typeof dir !== "string") {
-      console.error(`  FAILED: invalid plugin dir for ${name}`);
-	    results.push({ name, success: false });
-	    continue;
-    }
+		if (!dir || typeof dir !== 'string') {
+			log.itemFail(t('remove.invalidDir', { name }));
+			results.push({ name, success: false });
+			continue;
+		}
+
 		let size = await getDirSize(dir);
-		console.log(`- ${found.name}@${manifest.version || '?'}  size=${formatSize(size)}  path=${path.relative(process.cwd(), dir)}`);
-		if (!options.yes && !options.Y) {
-			const answer = await ask('remove? [y/N] ');
-			if (answer !== 'y') {
-				console.log('  skipped');
+		log.removed(`${found.manifest.name}@${manifest.version || '?'}  size=${formatSize(size)}  path=${path.relative(process.cwd(), dir)}`);
+
+		if (!skipConfirm) {
+			const ok = await confirm(t('remove.confirmPrompt'), false);
+			if (!ok) {
+				log.step(t('common.skipped'));
 				results.push({ name, success: false, skipped: true });
 				continue;
 			}
 		}
+
 		try {
 			const enabled   = readEnabled();
 			const set       = new Set(enabled);
-      const keySimple = found.name?.toLowerCase();
+			const keySimple = found.manifest.name?.toLowerCase();
 			const keyFull   = found.manifest.key?.toLowerCase();
 			if (set.has(keySimple)) set.delete(keySimple);
 			if (keyFull && set.has(keyFull)) set.delete(keyFull);
 			if (set.size !== enabled.size) {
 				await writeEnabled([...set]);
-				console.log(`  disabled ${found.manifest.key || found.name}`);
+				log.step(t('remove.disabled', { key: found.manifest.key || found.manifest.name }));
 			}
+
 			await fs.remove(dir);
+
 			const registry = await loadLocalRegistry();
 			const regKey = Object.keys(registry.plugins || {}).find(k =>
-				k === found.name || k.split('/').pop() === found.name
+				k === found.manifest.name || k.split('/').pop() === found.manifest.name
 			);
 			if (regKey) {
 				delete registry.plugins[regKey];
@@ -108,38 +79,39 @@ export async function removeCommand(input, options = {}) {
 			}
 
 			// offer to remove data dir
-			const dataKey  = found.manifest.key || found.name;
+			const dataKey  = found.manifest.key || found.manifest.name;
 			const dataPath = path.join(DATA_DIR, dataKey);
 			if (await fs.pathExists(dataPath)) {
 				const dataSize = await getDirSize(dataPath);
 				if (options.Y) {
 					await fs.remove(dataPath);
 					size += dataSize;
-					console.log(`  removed data  freed=${formatSize(dataSize)}`);
+					log.step(t('remove.removedDataFreed', { size: formatSize(dataSize) }));
 				} else {
-					const rmData = await ask(`  remove data too? (${formatSize(dataSize)}) [y/N] `);
-					if (rmData === 'y') {
+					const rmData = await confirm(t('remove.confirmData', { size: formatSize(dataSize) }), false);
+					if (rmData) {
 						await fs.remove(dataPath);
 						size += dataSize;
-						console.log(`  removed data`);
+						log.step(t('remove.removedData'));
 					} else {
-						console.log(`  kept data`);
+						log.step(t('remove.keptData'));
 					}
 				}
 			}
 
-			console.log(`  done  freed=${formatSize(size)}`);
+			log.step(t('remove.done', { size: formatSize(size) }));
 			results.push({ name, success: true, size });
 		} catch (e) {
-			console.error(`  FAILED: ${e.message}`);
+			log.itemFail(t('common.failedWith', { message: e.message }));
 			results.push({ name, success: false, error: e.message });
 		}
 	}
 
 	const ok    = results.filter(r => r.success).length;
-	const bad   = results.length - ok;
 	const freed = results.reduce((a, r) => a + (r.size || 0), 0);
-	if (names.length > 1)
-		console.log(`\n${ok}/${names.length} removed  freed=${formatSize(freed)}  time=${elapsed(t)}s`);
+	if (names.length > 1) {
+		log.plain('');
+		log.info(t('remove.summary', { ok, total: names.length, size: formatSize(freed), time: elapsed(t0) }));
+	}
 	if (results.some(r => !r.success && !r.skipped)) process.exit(1);
 }

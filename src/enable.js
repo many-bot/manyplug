@@ -1,32 +1,67 @@
-import { readEnabled, writeEnabled, resolvePlugin, discoverPlugins } from './plugins.js';
+import { readEnabled, writeEnabled, resolvePlugin, resolveProfile, discoverPlugins } from './plugins.js';
+import { log } from './logger.js';
+import { t } from './i18n.js';
+
+function elapsed(since) { return ((Date.now() - since) / 1000).toFixed(2); }
 
 // ------------------------------------------------------------
 // enable / disable commands
 // ------------------------------------------------------------
 
 async function toggle(names, action, options = {}) {
-	const t       = Date.now();
+	const t0      = Date.now();
 	const enabled = readEnabled();
 	const set     = new Set(enabled);
 
-	// --all: operate on every installed plugin
-	if (options.all) {
-		const all = await discoverPlugins();
-		if (!all.length) { console.log('no plugins installed'); return; }
-		for (const p of all) {
-			const key = (p.manifest.key || p.manifest.name).toLowerCase();
+	// -p/--profile: toggle every plugin tagged with this profile — explicit
+	// flag on purpose, since a profile's own name can collide with a
+	// plugin's name and we don't want that resolved implicitly
+	if (options.profile) {
+		if (names.length) log.warn(t('toggle.profileIgnoresNames'));
+
+		const resolved = await resolveProfile(options.profile);
+		if (!resolved) { log.error(t('toggle.profileNotFound', { name: options.profile })); process.exit(1); }
+		if (resolved.ambiguous) {
+			log.error(t('common.ambiguous', { name: options.profile }));
+			for (const m of resolved.ambiguous) console.error(`  ${m}`);
+			process.exit(1);
+		}
+
+		for (const p of resolved.members) {
+			const key = p.manifest.key || p.manifest.name;
 			if (action === 'enable') set.add(key);
 			else                     set.delete(key);
 		}
 		await writeEnabled([...set]);
-		const symbol = action === 'enable' ? '+' : '-';
-		for (const p of all) console.log(`${symbol} ${p.id}`);
-		console.log(`${all.length} plugins ${action}d  (${((Date.now() - t) / 1000).toFixed(2)}s)`);
+		const marker = action === 'enable' ? log.added : log.removed;
+		for (const p of resolved.members) marker(p.id);
+		log.info(t('toggle.profileDone', {
+			profile: resolved.key,
+			count:   resolved.members.length,
+			action:  t(`toggle.${action === 'enable' ? 'enabled' : 'disabled'}`),
+			time:    elapsed(t0),
+		}));
+		return;
+	}
+
+	// --all: operate on every installed plugin
+	if (options.all) {
+		const all = await discoverPlugins();
+		if (!all.length) { log.info(t('toggle.noPluginsInstalled')); return; }
+		for (const p of all) {
+			const key = (p.manifest.key || p.manifest.name);
+			if (action === 'enable') set.add(key);
+			else                     set.delete(key);
+		}
+		await writeEnabled([...set]);
+		const marker = action === 'enable' ? log.added : log.removed;
+		for (const p of all) marker(p.id);
+		log.info(t('toggle.allDone', { count: all.length, action: t(`toggle.${action === 'enable' ? 'enabled' : 'disabled'}`), time: elapsed(t0) }));
 		return;
 	}
 
 	if (!names.length) {
-		console.error(`usage: manyplug ${action} <plugin> [plugin2...]  [--all]`);
+		log.error(t('toggle.usage', { action }));
 		process.exit(1);
 	}
 
@@ -36,14 +71,14 @@ async function toggle(names, action, options = {}) {
 		const found = await resolvePlugin(name);
 
 		if (action === 'enable' && !found) {
-			console.error(`x ${name}: not installed`);
+			log.itemFail(t('common.notInstalled', { name }));
 			results.push({ name, changed: false, notFound: true });
 			continue;
 		}
 
 		const key = found
-			? (found.manifest.key || found.manifest.name).toLowerCase()
-			: name.toLowerCase();
+			? (found.manifest.key || found.manifest.name)
+			: name;
 
 		const was = set.has(key);
 		if (action === 'enable') set.add(key);
@@ -58,21 +93,24 @@ async function toggle(names, action, options = {}) {
 		try {
 			await writeEnabled([...set]);
 		} catch (e) {
-			console.error(`error: ${e.message}`);
+			log.error(t('common.failedWith', { message: e.message }));
 			process.exit(1);
 		}
 	}
 
 	for (const r of results) {
 		if (r.notFound) continue;
-		const symbol = action === 'enable' ? '+' : '-';
-		const note   = r.changed ? '' : ` (already ${action}d)`;
-		console.log(`${symbol} ${r.name}${note}`);
+		const marker = action === 'enable' ? log.added : log.removed;
+		const note   = r.changed ? '' : t(`toggle.already${action === 'enable' ? 'Enabled' : 'Disabled'}`);
+		marker(`${r.name}${note}`);
 	}
 
 	if (names.length > 1) {
 		const notFound = results.filter(r => r.notFound).length;
-		console.log(`${changed.length}/${names.length} changed  (${((Date.now() - t) / 1000).toFixed(2)}s)${notFound ? `  ${notFound} not found` : ''}`);
+		log.info(
+			t('toggle.summary', { changed: changed.length, total: names.length, time: elapsed(t0) }) +
+			(notFound ? t('toggle.notFoundSuffix', { count: notFound }) : '')
+		);
 	}
 
 	if (results.some(r => r.notFound)) process.exit(1);

@@ -1,12 +1,14 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { log } from './logger.js';
+import { t } from './i18n.js';
 
 // ------------------------------------------------------------
 
 async function loadManifest(cwd) {
 	const mp = path.join(cwd, 'manyplug.json');
 	if (!await fs.pathExists(mp))
-		throw new Error('manyplug.json not found, make sure to run from a plugin directory');
+		throw new Error(t('version.manifestNotFound'));
 	return { mp, manifest: await fs.readJson(mp) };
 }
 
@@ -17,17 +19,17 @@ async function loadManifest(cwd) {
 export async function versionCommand(input) {
 	let mp, manifest;
 	try { ({ mp, manifest } = await loadManifest(process.cwd())); }
-	catch (e) { console.error(`error: ${e.message}`); process.exit(1); }
+	catch (e) { log.error(e.message); process.exit(1); }
 
-  const name = manifest.key || manifest.name || "unnamed"; 
+	const name = manifest.key || manifest.name || 'unnamed';
 
 	if (!input) {
-		console.log(`${name} - ${manifest.version}` || '(no version set)');
+		log.plain(manifest.version ? `${name} - ${manifest.version}` : `${name} - ${t('version.noVersionSet')}`);
 		return;
 	}
 
-	const prev = manifest.version || '(none)';
+	const prev = manifest.version || t('version.noVersionSet');
 	manifest.version = input;
 	await fs.writeJson(mp, manifest, { spaces: 2 });
-	console.log(`${name} - ${prev} >> ${input}`);
+	log.plain(`${name} - ${prev} >> ${input}`);
 }
