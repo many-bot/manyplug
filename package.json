@@ -1,6 +1,6 @@
 {
   "name": "@manybot/manyplug",
-  "version": "2.3.3",
+  "version": "2.4.0",
   "description": "CLI plugin manager for ManyBot",
   "man": [
     "docs/manyplug.1"
@@ -19,13 +19,17 @@
   },
   "main": "./bin/manyplug.js",
   "bin": {
-    "manyplug": "bin/manyplug.js"
+    "manyplug": "bin/manyplug.js",
+    "mp": "bin/manyplug.js"
+  },
+  "scripts": {
+    "test": "node scripts/test.js",
+    "link": "npm link"
   },
   "dependencies": {
     "chalk": "^5.3.0",
     "commander": "^11.0.0",
     "fs-extra": "^11.3.4",
-    "ora": "^8.0.1",
     "smol-toml": "^1.7.0"
   }
 }
