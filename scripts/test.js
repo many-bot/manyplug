@@ -16,7 +16,7 @@ function makeHome() {
 }
 
 function run(home, ...args) {
-  return execSync(`HOME=${home} node ${BIN} ${args.join(' ')} 2>&1`, {
+  return execSync(`HOME=${home} MANYPLUG_LANG=en node ${BIN} ${args.join(' ')} 2>&1`, {
     encoding: 'utf-8',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -130,7 +130,7 @@ isolated('remove multiple plugins interactive', (mp, mpf, home) => {
   mp('install synt-xerror/figurinha');
   mp('install synt-xerror/counting');
   const out = execSync(
-    `HOME=${home} node ${BIN} remove synt-xerror/figurinha synt-xerror/counting`,
+    `HOME=${home} MANYPLUG_LANG=en node ${BIN} remove synt-xerror/figurinha synt-xerror/counting`,
     { encoding: 'utf-8', input: 'y\ny\n' }  // ← stdin injetado direto
   );
   assert.ok(out.includes('2/2 removed'), `unexpected output:\n${out}`);
@@ -142,7 +142,7 @@ isolated('remove multiple — skip first confirm second', (mp, mpf, home) => {
   let out;
   try {
     out = execSync(
-      `HOME=${home} node ${BIN} remove synt-xerror/figurinha synt-xerror/counting`,
+      `HOME=${home} MANYPLUG_LANG=en node ${BIN} remove synt-xerror/figurinha synt-xerror/counting`,
       { encoding: 'utf-8', input: '\ny\n' }
     );
   } catch (e) {
@@ -159,7 +159,7 @@ isolated('enable plugin saves key to conf', (mp, mpf, home) => {
   mp('install synt-xerror/figurinha');
   const out = mp('enable synt-xerror/figurinha');
   assert.ok(out.includes('+ synt-xerror/figurinha'), `unexpected output:\n${out}`);
-  const conf = fs.readFileSync(path.join(home, '.manybot', 'manyplug.conf'), 'utf-8');
+  const conf = fs.readFileSync(path.join(home, '.manybot', 'manyplug.toml'), 'utf-8');
   assert.ok(conf.includes('synt-xerror/figurinha'), 'key not found in conf');
 });
 
@@ -168,7 +168,7 @@ isolated('disable plugin removes key from conf', (mp, mpf, home) => {
   mp('enable synt-xerror/figurinha');
   const out = mp('disable synt-xerror/figurinha');
   assert.ok(out.includes('- synt-xerror/figurinha'), `unexpected output:\n${out}`);
-  const conf = fs.readFileSync(path.join(home, '.manybot', 'manyplug.conf'), 'utf-8');
+  const conf = fs.readFileSync(path.join(home, '.manybot', 'manyplug.toml'), 'utf-8');
   assert.ok(!conf.includes('synt-xerror/figurinha'), 'key still in conf after disable');
 });
 
