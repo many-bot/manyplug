@@ -1,0 +1,284 @@
+{
+  "common": {
+    "yesNoHint": "  responda com y ou n",
+    "cancelled": "cancelado",
+    "notInstalled": "{{name}}: não instalado",
+    "nothingToDo": "nada a fazer",
+    "done": "concluído",
+    "failed": "FALHOU",
+    "failedWith": "FALHOU: {{message}}",
+    "skipped": "pulado",
+    "ambiguous": "ambíguo: \"{{name}}\" corresponde a múltiplos plugins — use a key completa:"
+  },
+
+  "init": {
+    "invalidName": "o nome deve ter apenas letras minúsculas, números, pontos, underscores e hífens",
+    "unknownCategory": "categoria desconhecida, usando \"utility\"",
+    "authorPrompt": "handle do autor (ex: seu usuário do GitHub): ",
+    "invalidAuthor": "o autor deve ser alfanumérico",
+    "overwritePrompt": "\"{{name}}\" já existe, sobrescrever?",
+    "langPrompt": "linguagem do plugin — js ou ts?",
+    "invalidLang": "a linguagem deve ser \"js\" ou \"ts\"",
+    "creating": "criando {{key}}  categoria={{category}}  linguagem={{lang}}",
+    "creatingPack": "criando pluginpack {{key}}",
+    "creatingProfile": "criando profile {{key}}",
+    "done": "concluído  tamanho={{size}}  tempo={{time}}s",
+    "publishHint": "se for publicar, releia o manyplug.json e edite com as informações corretas",
+    "nextSteps": "  cd {{name}}\n  manyplug validate .\n  manyplug install --local ."
+  },
+
+  "install": {
+    "missingDeps": "dependências externas faltando: {{deps}}",
+    "optionalDeps": "dependências opcionais não encontradas: {{deps}}",
+    "installingDeps": "instalando dependências npm...",
+    "noKeyWarn": "sem key no manyplug.json — instalando como {{key}}",
+    "noKeyHint": "  dica: adicione \"key\": \"seunome/{{name}}\" ao manyplug.json",
+    "reinstalling": "{{key}} já instalado, reinstalando...",
+    "missingPluginDeps": "dependências de plugin faltando (não instaladas): {{deps}}",
+    "installingLocal": "instalando {{key}}  origem={{src}}  tamanho={{size}}",
+    "installedLocal": "instalado {{key}}  tamanho={{size}}  tempo={{time}}s",
+    "usage": "uso: manyplug install <plugin>",
+    "notFound": "não encontrado: {{names}}",
+    "resolvedName": "resolvido \"{{name}}\" → {{key}}",
+    "enabled": "ativado",
+    "conflict": "conflito: \"{{name}}\" já instalado como {{existing}}",
+    "conflictHint": "  use 'manyplug remove {{existing}}' primeiro",
+    "installingRemote": "instalando {{name}}... ",
+    "summary": "{{ok}}/{{total}} instalado(s) em {{time}}s",
+    "watching": "observando {{path}} ...",
+    "watchChanged": "  {{file}} mudou, reinstalando... ",
+    "packInstalling": "instalando pluginpack {{key}} — {{count}} plugin(s) dentro",
+    "packChildFailed": "  {{name}}: {{message}}",
+    "profileInstalling": "instalando profile {{key}} — {{count}} plugin(s) listado(s)",
+    "profileEmpty": "profile {{key}} não tem plugins listados",
+    "profileTooDeep": "{{name}} é um profile aninhado fundo demais pra expandir (máx. 5 níveis) — instale ele diretamente",
+    "pathNotFound": "caminho não encontrado: {{path}}",
+    "manifestNotFoundLocal": "manyplug.json não encontrado",
+    "invalidManifestLocal": "manyplug.json inválido: {{message}}",
+    "noReposFor": "nenhum repo definido para {{name}}"
+  },
+
+  "update": {
+    "skippingNoKey": "pulando {{names}} — sem key no manyplug.json (rode manyplug validate)",
+    "nothingToUpdate": "nada para atualizar",
+    "confirmPrompt": "atualizar {{count}} plugin(s)?"
+  },
+
+  "remove": {
+    "usage": "uso: manyplug remove <plugin> [plugin2...]",
+    "invalidDir": "diretório inválido para o plugin {{name}}",
+    "confirmPrompt": "remover?",
+    "disabled": "  desativado {{key}}",
+    "confirmData": "  remover os dados também? ({{size}})",
+    "removedDataFreed": "  dados removidos  liberado={{size}}",
+    "removedData": "  dados removidos",
+    "keptData": "  dados mantidos",
+    "done": "  concluído  liberado={{size}}",
+    "summary": "{{ok}}/{{total}} removido(s)  liberado={{size}}  tempo={{time}}s"
+  },
+
+  "toggle": {
+    "usage": "uso: manyplug {{action}} <plugin> [plugin2...]  [--all]",
+    "noPluginsInstalled": "nenhum plugin instalado",
+    "allDone": "{{count}} plugins {{action}}  ({{time}}s)",
+    "profileNotFound": "nenhum plugin instalado do profile \"{{name}}\"",
+    "profileDone": "profile {{profile}}: {{count}} plugin(s) {{action}}  ({{time}}s)",
+    "profileIgnoresNames": "-p/--profile ativa/desativa o profile inteiro — ignorando os nomes de plugin passados",
+    "alreadyEnabled": " (já estava ativado)",
+    "alreadyDisabled": " (já estava desativado)",
+    "summary": "{{changed}}/{{total}} alterado(s)  ({{time}}s)",
+    "notFoundSuffix": "  {{count}} não encontrado(s)",
+    "enabled": "ativados",
+    "disabled": "desativados"
+  },
+
+  "list": {
+    "noneInstalled": "nenhum plugin instalado",
+    "noneEnabled": "nenhum plugin ativado  (use --all para ver todos)",
+    "colName": "nome",
+    "colVersion": "versão",
+    "colCategory": "categoria",
+    "colType": "tipo",
+    "colStatus": "status",
+    "statusEnabled": "ativado",
+    "statusDisabled": "desativado",
+    "statusIncomplete": "incompleto",
+    "legend": "svc=serviço  std=padrão  !=sem ponto de entrada",
+    "summary": "total={{total}} ativados={{enabled}} desativados={{disabled}}",
+    "summaryIncomplete": " incompletos={{count}}"
+  },
+
+  "validate": {
+    "pathNotFound": "caminho não encontrado: {{path}}",
+    "manifestNotFound": "manyplug.json não encontrado em {{path}}",
+    "manifestNotFoundHint": "  dica: rode \"manyplug init <nome>\" para criar um plugin",
+    "invalidManifest": "manyplug.json inválido: {{message}}",
+    "missingRequired": "campo obrigatório ausente",
+    "unknownField": "campo desconhecido",
+    "keySuffixMismatch": "o sufixo da key não bate com o name (esperado .../{{name}})",
+    "missingKey": "key ausente (autor/nome) — necessária para publicar",
+    "missingAuthor": "author ausente — recomendado para publicar",
+    "entryNotFound": "ponto de entrada não encontrado: {{main}}",
+    "mbVersionMissingInstall": "manybot não está instalado ou a versão não pôde ser detectada, mas o plugin requer manybot {{range}}",
+    "mbVersionMismatch": "a versão instalada do manybot ({{version}}) não satisfaz o intervalo exigido ({{range}})",
+    "mbVersionOk": "a versão instalada do manybot ({{version}}) satisfaz o intervalo exigido ({{range}})",
+    "mbVersionDetected": "versão do manybot detectada: {{version}}",
+    "npmDepMissing": "dependência npm '{{dep}}' não está instalada no node_modules do plugin",
+    "pkgJsonInvalid": "falha ao ler package.json: {{message}}",
+    "noLocaleDir": "sem diretório locale/ (i18n recomendado)",
+    "emptyLocaleDir": "o diretório locale/ está vazio",
+    "invalidLocaleJson": "JSON inválido: {{message}}",
+    "missingTranslationKeys": "chaves de tradução faltando: {{keys}}",
+    "localeReadFailed": "falha ao ler o diretório locale: {{message}}",
+    "destructuredUnknown": "propriedade desestruturada '{{prop}}' de ctx não existe",
+    "unknownCtxProp": "propriedade 'ctx.{{prop}}' não existe",
+    "unknownCtxMethod": "método 'ctx.{{prop}}.{{nested}}' não existe",
+    "binaryMissing": "referencia o binário '{{bin}}' mas ele não está instalado no sistema",
+    "binaryFoundVersion": "binário '{{bin}}' encontrado, versão: {{version}}",
+    "binaryVersionUnknown": "binário '{{bin}}' encontrado mas não foi possível determinar a versão",
+    "codeScanFailed": "falha ao concluir a validação de código: {{message}}",
+    "depsAdded": "adicionado(s) a dependencies (encontrado via ctx.plugins.require): {{deps}}",
+    "depsWriteFailed": "falha ao escrever dependencies no manyplug.json: {{message}}",
+    "depsUnused": "declarado(s) mas não referenciado(s) via ctx.plugins.require: {{deps}}",
+    "externalDepMissing": "comando não encontrado: {{cmd}}",
+    "allOk": "ok  todas as checagens passaram",
+    "summary": "erros={{errors}}  avisos={{warnings}}",
+    "packNoChildren": "pluginpack não tem subdiretórios de plugin",
+    "profileEmptyList": "profile não tem plugins listados",
+    "profileEntryInvalid": "plugins[{{index}}] deve ser uma string de key de plugin"
+  },
+
+  "info": {
+    "usage": "uso: manyplug info <plugin>",
+    "rowName": "nome",
+    "rowKey": "key",
+    "rowVersion": "versão",
+    "rowCategory": "categoria",
+    "rowAuthor": "autor",
+    "rowLicense": "licença",
+    "rowRepo": "repo",
+    "rowType": "tipo",
+    "rowStatus": "status",
+    "rowMain": "main",
+    "rowPath": "caminho",
+    "rowSize": "tamanho",
+    "rowData": "dados",
+    "typeStandard": "padrão",
+    "typeService": "serviço",
+    "typePluginpack": "pluginpack",
+    "typeProfile": "profile",
+    "dataNone": "nenhum",
+    "depsHeader": "requer plugins:",
+    "extDepsHeader": "dependências externas:",
+    "optionalSuffix": " (opcional)",
+    "manifestParseWarn": "o manyplug.json não pôde ser interpretado"
+  },
+
+  "version": {
+    "manifestNotFound": "manyplug.json não encontrado — rode este comando dentro de um diretório de plugin",
+    "noVersionSet": "(nenhuma versão definida)"
+  },
+
+  "registry": {
+    "networkError": "erro de rede: {{message}}",
+    "httpError": "HTTP {{status}} ao buscar o mpindex",
+    "invalidIndex": "mpindex inválido: campo plugins ausente"
+  },
+
+  "tarball": {
+    "fetching": "  buscando {{url}}... ",
+    "notGzip": "não é um arquivo gzip (cabeçalho inválido)",
+    "copying": "  copiando {{size}}... ",
+    "allMirrorsFailed": "todos os mirrors falharam: {{message}}",
+    "noReposDefined": "nenhum repo definido na entrada do registry",
+    "branchNotFound": "branch \"{{branch}}\" não encontrado em nenhum repo",
+    "unsupportedHost": "host não suportado: {{host}}"
+  },
+
+  "npm": {
+    "installing": "  npm install... ",
+    "installFailed": "npm install falhou: {{message}}"
+  },
+
+  "link": {
+    "alreadyLinked": "{{key}} já está linkado a este caminho",
+    "relinking": "{{key}} já existe, relinkando...",
+    "linked": "linkado {{key}} → {{src}}",
+    "summary": "{{count}} plugin(s) linkado(s) em {{time}}s",
+    "hint": "alterações nesta pasta agora se aplicam automaticamente — sem necessidade de reinstalar",
+    "noProfiles": "profiles não têm código para linkar — nada a fazer"
+  },
+
+  "search": {
+    "usage": "uso: manyplug search <busca>",
+    "noResults": "nenhum plugin encontrado para \"{{query}}\"",
+    "summary": "{{count}} resultado(s) para \"{{query}}\"",
+    "installed": "instalado"
+  },
+
+  "help": {
+    "title": "manyplug {{version}} - gerenciador de plugins do ManyBot",
+    "unknownCommand": "comando desconhecido: {{cmd}}",
+    "runHelp": "rode \"manyplug help\" para ver o uso",
+    "commandsLine": "comandos: init install update link remove search list enable disable validate version info",
+    "optionsLine": "opções:  -v/--version  help <comando>",
+    "aliasesLine": "aliases:  i=install  up=update  ln=link  rm=remove  s=search  ls=list  en=enable  dis=disable  val=validate  mp=manyplug",
+    "commands": {
+      "help":     { "description": "mostra ajuda para um comando" },
+      "init":     {
+        "description": "cria o esqueleto de um novo plugin, pluginpack ou profile",
+        "options": {
+          "category": "categoria (integration games media utility admin fun moderation ai education social economy automation tools)",
+          "type":     "plugin, pluginpack ou profile",
+          "lang":     "linguagem do plugin: js ou ts (perguntado se omitido)"
+        }
+      },
+      "install":  {
+        "description": "instala plugins, pluginpacks ou profiles do registry ou de um caminho local",
+        "options": {
+          "local":  "instala de um caminho local",
+          "watch":  "observa mudanças e reinstala automaticamente (requer --local)",
+          "branch": "instala de uma branch específica",
+          "yes":    "pula confirmação"
+        }
+      },
+      "update":   {
+        "description": "reinstala todos os plugins não-locais",
+        "options": { "yes": "pula confirmação" }
+      },
+      "link":     { "description": "cria um symlink de um plugin local na pasta de plugins (como npm link) — edições valem na hora, sem precisar reinstalar" },
+      "remove":   {
+        "description": "remove plugins instalados",
+        "options": {
+          "yes": "pula confirmação",
+          "Y":   "pula também a confirmação de remoção dos dados"
+        }
+      },
+      "search":   {
+        "description": "busca plugins no registry",
+        "options": { "category": "filtra por categoria" }
+      },
+      "list":     {
+        "description": "lista plugins instalados (só os ativos por padrão)",
+        "options": { "all": "inclui plugins desativados" }
+      },
+      "enable":   {
+        "description": "ativa plugins",
+        "options": {
+          "all":     "ativa todos os plugins",
+          "profile": "ativa todos os plugins instalados através desse profile"
+        }
+      },
+      "disable":  {
+        "description": "desativa plugins",
+        "options": {
+          "all":     "desativa todos os plugins",
+          "profile": "desativa todos os plugins instalados através desse profile"
+        }
+      },
+      "validate": { "description": "valida o manyplug.json" },
+      "version":  { "description": "exibe ou atualiza a versão no manifest do plugin (pode ser qualquer string)" },
+      "info":     { "description": "mostra informações de um plugin instalado" }
+    }
+  }
+}
