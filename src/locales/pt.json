@@ -133,6 +133,7 @@
     "destructuredUnknown": "propriedade desestruturada '{{prop}}' de ctx não existe",
     "unknownCtxProp": "propriedade 'ctx.{{prop}}' não existe",
     "unknownCtxMethod": "método 'ctx.{{prop}}.{{nested}}' não existe",
+    "senderNotCallable": "'{{path}}' é um objeto de envio, não uma função — chame um método nele, ex: '{{path}}.text(...)'",
     "binaryMissing": "referencia o binário '{{bin}}' mas ele não está instalado no sistema",
     "binaryFoundVersion": "binário '{{bin}}' encontrado, versão: {{version}}",
     "binaryVersionUnknown": "binário '{{bin}}' encontrado mas não foi possível determinar a versão",

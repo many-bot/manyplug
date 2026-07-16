@@ -133,6 +133,7 @@
     "destructuredUnknown": "destructured property '{{prop}}' from ctx does not exist",
     "unknownCtxProp": "property 'ctx.{{prop}}' does not exist",
     "unknownCtxMethod": "endpoint/method 'ctx.{{prop}}.{{nested}}' does not exist",
+    "senderNotCallable": "'{{path}}' is a sender object, not a function — call a method on it instead, e.g. '{{path}}.text(...)'",
     "binaryMissing": "references binary '{{bin}}' but it is not installed on the system",
     "binaryFoundVersion": "found binary '{{bin}}' version: {{version}}",
     "binaryVersionUnknown": "found binary '{{bin}}' but could not determine its version",

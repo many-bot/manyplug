@@ -127,13 +127,13 @@ const VALID_CTX_KEYS = {
 	log: ['info', 'warn', 'error', 'success'],
 	config: ['get'],
 	i18n: ['t', 'createT', 'reload', 'getCurrentLang'],
-	utils: ['emptyFolder', 'getChatId'],
+	utils: ['emptyFolder'],
 	download: ['enqueue'],
 	scheduler: ['schedule'],
 	plugins: ['get', 'require', 'exists'],
 	contacts: ['get', 'getPfpUrl', 'getPfpPath', 'getAbout', 'block', 'unblock'],
 	storage: ['dir', 'resolve'],
-	send: ['text', 'image', 'video', 'audio', 'sticker', 'file', 'poll', 'viewOnce', 'to'],
+	send: ['text', 'image', 'video', 'audio', 'sticker', 'file', 'poll', 'to'],
 	msg: ['body', 'type', 'fromMe', 'sender', 'senderName', 'command', 'args', 'is', 'hasMedia', 'isGif', 'downloadMedia', 'hasReply', 'getReply', 'reply', 'react', 'delete', 'pin', 'hasPrefix', 'getContact'],
 	chat: ['id', 'name', 'isGroup', 'getParticipants', 'isAdmin', 'isSenderAdmin', 'isBotAdmin', 'clearMessages'],
 	admin: ['add', 'kick', 'promote', 'demote', 'setSubject', 'setDescription', 'setProfilePic', 'getInviteLink', 'revokeInvite'],
@@ -448,6 +448,19 @@ export async function validateCommand(pluginPath = '.') {
 						if (!VALID_CTX_KEYS[prop].includes(nested)) {
 							warn(`${relativeFile}`, t('validate.unknownCtxMethod', { prop, nested }));
 						}
+					}
+				}
+
+				// Some ctx properties are sender objects (WAMessageSender) — they expose
+				// methods like .text()/.image()/etc but aren't callable themselves. The
+				// 2-level regex above can't tell "ctx.send.text(...)" (valid) apart from
+				// "ctx.send(...)" (invalid), so check those known paths directly.
+				const NON_CALLABLE_SENDERS = ['send', 'msg.reply'];
+				for (const senderPath of NON_CALLABLE_SENDERS) {
+					const escaped = senderPath.replace(/\./g, '\\.');
+					const directCallRegex = new RegExp(`\\bctx\\.${escaped}\\s*\\(`);
+					if (directCallRegex.test(content)) {
+						warn(`${relativeFile}`, t('validate.senderNotCallable', { path: `ctx.${senderPath}` }));
 					}
 				}
 
