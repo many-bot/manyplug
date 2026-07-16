@@ -29,13 +29,21 @@ export async function getDirSize(dir) {
 // Installs whatever is declared in the plugin's own package.json. Plugin
 // authors manage their npm deps there — manyplug.json's `dependencies` is
 // reserved for other manybot plugins, not npm packages.
+const TRUSTED_NATIVE_BUILDS = ['sharp', 'sqlite3', 'better-sqlite3', 'canvas', 'bcrypt'];
+
 export async function installNpmDeps(pluginDir) {
 	process.stdout.write(t('npm.installing'));
 	try {
 		await run('npm install', pluginDir);
+		await run(
+			`npm install-scripts approve ${TRUSTED_NATIVE_BUILDS.join(' ')} 2>/dev/null || true`,
+			pluginDir
+		);
+		await run('npm rebuild', pluginDir);
 		console.log(chalk.green('ok'));
 	} catch (e) {
-		console.warn(chalk.yellow(t('npm.installFailed', { message: e.message })));
+		console.error(chalk.red(t('npm.installFailed', { message: e.message })));
+		throw e;
 	}
 }
 
