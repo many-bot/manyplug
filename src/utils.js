@@ -197,7 +197,11 @@ export async function installPackFromTarball({ name, repos, branch }, pluginsDir
 				const dest = path.join(pluginsDir, key);
 				const size = await getDirSize(childDir);
 				await fs.mkdir(pluginsDir, { recursive: true });
-				await fs.cp(childDir, dest, { recursive: true });
+				// childDir is already fully extracted & validated in tmp — only
+				// now do we touch the real destination, so a cancel before this
+				// point never leaves the plugin uninstalled.
+				if (await fs.pathExists(dest)) await fs.remove(dest);
+				await fs.move(childDir, dest);
 				children.push({ manifest, finalPath: dest, size });
 			}
 
@@ -243,7 +247,11 @@ export async function installPluginFromTarball({ name, repos, branch }, pluginsD
 
 			process.stdout.write(t('tarball.copying', { size: formatSize(size) }));
 			await fs.mkdir(pluginsDir, { recursive: true });
-			await fs.cp(extract, dest, { recursive: true });
+			// extract is already fully downloaded, extracted, and validated in
+			// tmp — only now do we touch the real destination, so a cancel
+			// before this point never leaves the plugin uninstalled.
+			if (await fs.pathExists(dest)) await fs.remove(dest);
+			await fs.move(extract, dest);
 			console.log(chalk.green('ok'));
 
 			return { manifest, finalPath: dest, size };

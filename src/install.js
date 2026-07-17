@@ -103,13 +103,8 @@ async function installSinglePluginFromLocal(src, manifest, options = {}) {
 		log.step(t('install.noKeyHint', { name: pluginName }));
 	}
 
-	const dest = path.join(PLUGINS_DIR, destKey);
-
-	// reinstall: wipe existing install silently (dev workflow friendly)
-	if (await fs.pathExists(dest)) {
-		if (!options.force) log.changed(t('install.reinstalling', { key: destKey }));
-		await fs.remove(dest);
-	}
+	const dest    = path.join(PLUGINS_DIR, destKey);
+	const staging = path.join(PLUGINS_DIR, `.${path.basename(destKey)}.staging-${process.pid}-${Date.now()}`);
 
 	const size = await getDirSize(src);
 	log.info(t('install.installingLocal', { key: destKey, src, size: formatSize(size) }));
@@ -117,7 +112,14 @@ async function installSinglePluginFromLocal(src, manifest, options = {}) {
 
 	try {
 		await fs.ensureDir(path.dirname(dest));
-		await fs.copy(src, dest);
+		await fs.copy(src, staging);
+
+		if (await fs.pathExists(dest)) {
+			if (!options.force) log.changed(t('install.reinstalling', { key: destKey }));
+			await fs.remove(dest);
+		}
+		await fs.move(staging, dest);
+
 		await fs.ensureDir(path.join(DATA_DIR, destKey));
 		await installNpmIfDeclared(dest);
 		await reportPluginDeps(manifest);
@@ -125,6 +127,7 @@ async function installSinglePluginFromLocal(src, manifest, options = {}) {
 		await autoEnable(destKey);
 		return { success: true, plugin: destKey, name: pluginName, size };
 	} catch (e) {
+		await fs.remove(staging).catch(() => {});
 		return { success: false, error: e.message, plugin: destKey, name: pluginName };
 	}
 }
@@ -398,7 +401,11 @@ export async function installCommand(pluginsInput, options = {}) {
 		}
 	}
 
-	// -- print plan + wipe existing --
+	// -- print plan --
+	// (no wiping here anymore — the old install stays in place until the
+	// new one has been fully downloaded and validated; see
+	// installPluginFromTarball/installPackFromTarball in utils.js, which
+	// swap it in atomically right before returning)
 	for (const p of queue) {
 		const existing = discovered.find(d =>
 			d.manifest.key === p.name || d.manifest.name === shortName(p.name)
@@ -407,14 +414,6 @@ export async function installCommand(pluginsInput, options = {}) {
 		const target = p.version ?? 'new';
 		const label  = existing ? `${existing.manifest.version || '?'} → ${target}` : target;
 		marker(`${p.name}@${label}`);
-		if (existing) {
-			await fs.remove(existing.dir);
-			const registry = await loadLocalRegistry();
-			const regKey = Object.keys(registry.plugins || {}).find(k =>
-				k === p.name || k.split('/').pop() === shortName(p.name)
-			);
-			if (regKey) { delete registry.plugins[regKey]; await saveRegistry(registry); }
-		}
 	}
 
 	// -- run queue --
