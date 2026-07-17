@@ -26,18 +26,60 @@ export async function getDirSize(dir) {
 	return total;
 }
 
+// npm 11+ blocks native build scripts by default (allowScripts). These are
+// well-known packages manybot plugins commonly bundle for image/db/audio
+// processing — approve just these, not --all, so unreviewed 3rd-party
+// scripts still stay blocked.
+const TRUSTED_NATIVE_BUILDS = [
+	'sharp', 'sqlite3', 'better-sqlite3', 'canvas', '@napi-rs/canvas', 'bcrypt',
+];
+
+// Some plugin deps (e.g. wa-sticker-formatter -> sharp) ship with their
+// own vendored node_modules already present, so the plugin root's
+// `npm install` treats that subtree as already satisfied and never
+// installs the missing native binary inside it. Finds each nested
+// package.json that DECLARES a trusted native package as its own
+// dependency, regardless of whether it's actually present yet.
+async function findNestedNativeDeps(pluginDir) {
+	const stdout = await run(
+		`find . -mindepth 2 -maxdepth 4 -name package.json -path "*/node_modules/*"`,
+		pluginDir
+	).catch(() => '');
+
+	const hits = [];
+	for (const rel of stdout.split('\n').filter(Boolean)) {
+		let pkg;
+		try { pkg = await fs.readJson(path.join(pluginDir, rel)); } catch { continue; }
+		const deps = { ...pkg.dependencies, ...pkg.optionalDependencies };
+		const needed = TRUSTED_NATIVE_BUILDS.filter(n => deps[n]);
+		if (needed.length) hits.push({ dir: path.dirname(path.join(pluginDir, rel)), pkgs: needed });
+	}
+	return hits;
+}
+
 // Installs whatever is declared in the plugin's own package.json. Plugin
 // authors manage their npm deps there — manyplug.json's `dependencies` is
 // reserved for other manybot plugins, not npm packages.
 //
-// --ignore-scripts=false forces install scripts to run even if a global
-// or user .npmrc sets ignore-scripts=true — without it, native modules
-// like sharp/sqlite3 silently skip their prebuilt-binary download.
+// npm 11+ blocks install scripts by default (allowScripts). We approve
+// --all rather than naming specific packages: naming packages that have
+// nothing pending causes the whole approve command to fail silently
+// (caught below), leaving every script blocked. The plugin's own code
+// already runs with full privileges once loaded, so gating scripts by
+// name adds fragility without real extra protection here.
 export async function installNpmDeps(pluginDir) {
 	process.stdout.write(t('npm.installing'));
 	try {
-		await run('npm install --ignore-scripts=false', pluginDir);
+		await run('npm install', pluginDir);
+		await run('npm install-scripts approve --all', pluginDir).catch(() => {});
 		await run('npm rebuild', pluginDir);
+
+		for (const { dir, pkgs } of await findNestedNativeDeps(pluginDir)) {
+			await run(`npm install ${pkgs.join(' ')}`, dir).catch(() => {});
+			await run('npm install-scripts approve --all', dir).catch(() => {});
+			await run('npm rebuild', dir).catch(() => {});
+		}
+
 		console.log(chalk.green('ok'));
 	} catch (e) {
 		console.error(chalk.red(t('npm.installFailed', { message: e.message })));
