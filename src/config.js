@@ -67,7 +67,24 @@ const DEFAULT_TOML_PT = `\
 PLUGINS = []
 `;
 
-const DEFAULT_TOML = detectSystemLang() === 'pt' ? DEFAULT_TOML_PT : DEFAULT_TOML_EN;
+const DEFAULT_TOML_ES = `\
+# Configuración de ManyPlug — https://manybot.stxerr.dev/manyplug/docs/config
+
+# Idioma de la interfaz. "auto" lo detecta según el idioma de tu sistema.
+# LANGUAGE = "auto"
+
+# Registro usado por "manyplug install <nombre>".
+# REGISTRY = "${DEFAULT_REGISTRY}"
+
+# Pedir confirmación antes de acciones destructivas (remove, update).
+# CONFIRM = true
+
+# Plugins de ManyBot activados al iniciar — gestionado por "manyplug enable/disable".
+PLUGINS = []
+`;
+
+const DEFAULT_TOML_BY_LANG = { pt: DEFAULT_TOML_PT, es: DEFAULT_TOML_ES };
+const DEFAULT_TOML = DEFAULT_TOML_BY_LANG[detectSystemLang()] || DEFAULT_TOML_EN;
 
 // ------------------------------------------------------------
 // legacy .conf migration (manyplug.conf → manyplug.toml)

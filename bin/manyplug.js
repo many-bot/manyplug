@@ -8,7 +8,7 @@ import { removeCommand }                 from '../src/remove.js';
 import { enableCommand, disableCommand } from '../src/enable.js';
 import { initCommand }                   from '../src/init.js';
 import { validateCommand }               from '../src/validate.js';
-import { linkCommand }                   from '../src/link.js';
+import { linkCommand, unlinkCommand }    from '../src/link.js';
 import { infoCommand }                   from '../src/info.js';
 import { versionCommand }                from '../src/version.js';
 import { searchCommand }                 from '../src/search.js';
@@ -93,12 +93,17 @@ program.command('install [plugins...]').alias('i').description('install plugins,
 	.option('-y, --yes',             'skip confirmation')
 	.action(installCommand);
 
-program.command('update').alias('up').description('reinstall all non-local plugins')
-	.option('-y, --yes', 'skip confirmation')
+program.command('update [plugins...]').alias('up').description('reinstall non-local plugins whose remote version changed (all if none given)')
+	.option('-y, --yes',   'skip confirmation')
+	.option('-f, --force', 'reinstall even if already up to date')
 	.action(updateCommand);
 
 program.command('link [path]').alias('ln').description('symlink a local plugin into the plugins dir (like npm link) — edits apply live, no reinstall needed')
 	.action(linkCommand);
+
+program.command('unlink [plugins...]').alias('unln').description('remove a linked plugin (undo link) — leaves the source directory untouched')
+	.option('-y, --yes', 'skip confirmation')
+	.action(unlinkCommand);
 
 program.command('remove [plugins...]').alias('rm').description('remove installed plugins')
 	.option('-y, --yes', 'skip confirmation')

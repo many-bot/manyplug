@@ -9,7 +9,7 @@ import { t } from './i18n.js';
 import { loadLocalRegistry, saveRegistry, fetchRemoteRegistry } from './registry-ops.js';
 import { getDirSize, installPluginFromTarball, installPackFromTarball, installNpmDeps } from './utils.js';
 import { PLUGINS_DIR, DATA_DIR } from './paths.js';
-import { discoverPlugins, readEnabled, writeEnabled } from './plugins.js';
+import { discoverPlugins, readEnabled, writeEnabled, resolvePlugin } from './plugins.js';
 import { getPreference } from './config.js';
 
 // ------------------------------------------------------------
@@ -436,28 +436,77 @@ export async function installCommand(pluginsInput, options = {}) {
 }
 
 // ------------------------------------------------------------
-// update command — reinstall all non-local plugins
+// update command — reinstall non-local plugins whose remote version
+// differs from what's installed; --force reinstalls regardless
 // ------------------------------------------------------------
 
-export async function updateCommand(options = {}) {
-  const t0      = Date.now();
-  const plugins = await discoverPlugins();
+export async function updateCommand(pluginsInput, options = {}) {
+  const t0    = Date.now();
+  const names = Array.isArray(pluginsInput) ? pluginsInput : (pluginsInput ? [pluginsInput] : []);
 
-  const withKey    = plugins.filter(p => !p.manifest.local && p.manifest.key);
-  const withoutKey = plugins.filter(p => !p.manifest.local && !p.manifest.key);
+  const all = await discoverPlugins();
 
-  if (withoutKey.length)
-    log.warn(t('update.skippingNoKey', { names: withoutKey.map(p => p.manifest.name || p.id).join(', ') }));
+  // -- pick candidates: explicit names, or every installed plugin --
+  let candidates;
+  if (names.length) {
+    candidates = [];
+    for (const name of names) {
+      const found = await resolvePlugin(name);
+      if (!found) { log.itemFail(t('common.notInstalled', { name })); continue; }
+      candidates.push(found);
+    }
+  } else {
+    candidates = all;
+  }
 
-  const names = withKey.map(p => p.manifest.key);
+  const local     = candidates.filter(p => p.manifest.local);
+  const withKey   = candidates.filter(p => !p.manifest.local && p.manifest.key);
+  const noKey     = candidates.filter(p => !p.manifest.local && !p.manifest.key);
 
-  if (!names.length) { log.info(t('update.nothingToUpdate')); return; }
+  if (local.length)
+    log.warn(t('update.skippingLocal', { names: local.map(p => p.manifest.key || p.manifest.name || p.id).join(', ') }));
+  if (noKey.length)
+    log.warn(t('update.skippingNoKey', { names: noKey.map(p => p.manifest.name || p.id).join(', ') }));
+
+  if (!withKey.length) { log.info(t('update.nothingToUpdate')); return; }
+
+  // -- fetch remote registry once, compare versions --
+  let remoteRegistry;
+  try {
+    remoteRegistry = await fetchRemoteRegistry();
+  } catch (e) {
+    log.error(e.message);
+    process.exit(1);
+  }
+
+  const toUpdate = [];
+  for (const p of withKey) {
+    const resolved = resolveRegistryName(p.manifest.key, remoteRegistry);
+    if (!resolved || resolved.ambiguous) {
+      log.skipped(t('update.notInRegistry', { key: p.manifest.key }));
+      continue;
+    }
+
+    const localVersion  = p.manifest.version;
+    const remoteVersion = resolved.manifest.version;
+    const outdated       = remoteVersion !== undefined && remoteVersion !== localVersion;
+
+    if (!outdated && !options.force) {
+      log.skipped(t('update.upToDate', { key: resolved.key, version: localVersion || '?' }));
+      continue;
+    }
+
+    log.changed(t('update.willUpdate', { key: resolved.key, from: localVersion || '?', to: remoteVersion ?? '?' }));
+    toUpdate.push(resolved.key);
+  }
+
+  if (!toUpdate.length) { log.info(t('update.nothingToUpdate')); return; }
 
   const skipConfirm = options.yes || !getPreference('CONFIRM', true);
   if (!skipConfirm) {
-    const ok = await confirm(t('update.confirmPrompt', { count: names.length }), false);
+    const ok = await confirm(t('update.confirmPrompt', { count: toUpdate.length }), false);
     if (!ok) { log.info(t('common.cancelled')); process.exit(0); }
   }
 
-  await installCommand(names, {});
+  await installCommand(toUpdate, {});
 }

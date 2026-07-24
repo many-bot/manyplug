@@ -5,10 +5,9 @@ import { ask, confirm } from './ui.js';
 import { getDirSize } from './utils.js';
 import { log } from './logger.js';
 import { t, getCurrentLang } from './i18n.js';
+import { VALID_CATEGORIES, AUTHOR_RE, nameError } from './schema.js';
 
 const isPt = () => getCurrentLang() === 'pt';
-
-const VALID_CATEGORIES = ['integration', 'games', 'media', 'utility', 'admin', 'fun', 'moderation', 'ai', 'education', 'social', 'economy', 'automation', 'tools'];
 
 // ------------------------------------------------------------
 // plugin templates
@@ -30,7 +29,7 @@ const manyplugJson = (name, author, category, main) => ({
 
 const indexJs = (name) => `\
 // ${name} - plugin do ManyBot
-// Veja a referência da API em: https://manybot.stxerr.dev/docs/api-reference
+// Veja a referência da API em: https://manybot.stxerr.dev/docs/api-reference/pt
 
 /** @param {import('@manybot/types').PluginContext} ctx */
 export default async function (ctx) {
@@ -56,7 +55,7 @@ export default async function (ctx) {
 
 const indexTs = (name) => `\
 // ${name} - plugin do ManyBot
-// Veja a referência da API em: https://manybot.stxerr.dev/docs/api-reference
+// Veja a referência da API em: https://manybot.stxerr.dev/docs/api-reference/pt
 
 import type { PluginContext } from "@manybot/types";
 
@@ -242,7 +241,7 @@ registry — nothing here is installed directly.
 
 async function promptAuthor() {
 	const author = await ask(t('init.authorPrompt'));
-	if (!author || !/^[a-z0-9-]+$/i.test(author)) {
+	if (!author || !AUTHOR_RE.test(author)) {
 		log.error(t('init.invalidAuthor'));
 		process.exit(1);
 	}
@@ -265,7 +264,7 @@ async function promptLang(explicit) {
 }
 
 function validateName(name) {
-	if (!name || !/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(name)) {
+	if (nameError(name)) {
 		log.error(t('init.invalidName'));
 		process.exit(1);
 	}

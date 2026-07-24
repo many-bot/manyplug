@@ -12,7 +12,7 @@
   },
 
   "init": {
-    "invalidName": "name must be lowercase letters, numbers, dots, underscores and hyphens only",
+    "invalidName": "name must be lowercase letters, numbers and hyphens only (2-50 chars)",
     "unknownCategory": "unknown category, using \"utility\"",
     "authorPrompt": "author handle (e.g. your GitHub username): ",
     "invalidAuthor": "author must be alphanumeric",
@@ -60,6 +60,10 @@
 
   "update": {
     "skippingNoKey": "skipping {{names}} — no key in manyplug.json (run manyplug validate)",
+    "skippingLocal": "skipping {{names}} — locally installed or linked, not managed by the registry",
+    "notInRegistry": "{{key}}: not found in registry, skipping",
+    "upToDate": "{{key}}@{{version}} is up to date",
+    "willUpdate": "{{key}} {{from}} → {{to}}",
     "nothingToUpdate": "nothing to update",
     "confirmPrompt": "update {{count}} plugin(s)?"
   },
@@ -98,12 +102,14 @@
     "colName": "name",
     "colVersion": "version",
     "colCategory": "category",
-    "colType": "type",
+    "colType": "link",
     "colStatus": "status",
     "statusEnabled": "enabled",
     "statusDisabled": "disabled",
     "statusIncomplete": "incomplete",
-    "legend": "svc=service  std=standard  !=missing entry point",
+    "linkYes": "link",
+    "linkNo": "-",
+    "legend": "link=symlinked plugin  !=missing entry point",
     "summary": "total={{total}} enabled={{enabled}} disabled={{disabled}}",
     "summaryIncomplete": " incomplete={{count}}"
   },
@@ -210,6 +216,14 @@
     "noProfiles": "profiles have no code to link — nothing to do"
   },
 
+  "unlink": {
+    "usage": "usage: manyplug unlink <plugin...>",
+    "notLinked": "{{name}} is not a linked plugin (use `manyplug remove` instead)",
+    "confirmPrompt": "unlink {{key}}? (source directory is left untouched)",
+    "unlinked": "unlinked {{key}}",
+    "summary": "{{ok}}/{{total}} plugin(s) unlinked in {{time}}s"
+  },
+
   "search": {
     "usage": "usage: manyplug search <query>",
     "noResults": "no plugins found matching \"{{query}}\"",
@@ -221,9 +235,9 @@
     "title": "manyplug {{version}} - plugin manager for ManyBot",
     "unknownCommand": "unknown command: {{cmd}}",
     "runHelp": "run \"manyplug help\" for usage",
-    "commandsLine": "commands: init install update link remove search list enable disable validate version info",
+    "commandsLine": "commands: init install update link unlink remove search list enable disable validate version info",
     "optionsLine": "options:  -v/--version  help <command>",
-    "aliasesLine": "aliases:  i=install  up=update  ln=link  rm=remove  s=search  ls=list  en=enable  dis=disable  val=validate  mp=manyplug",
+    "aliasesLine": "aliases:  i=install  up=update  ln=link  unln=unlink  rm=remove  s=search  ls=list  en=enable  dis=disable  val=validate  mp=manyplug",
     "commands": {
       "help":     { "description": "show help for a command" },
       "init":     {
@@ -244,10 +258,14 @@
         }
       },
       "update":   {
-        "description": "reinstall all non-local plugins",
-        "options": { "yes": "skip confirmation" }
+        "description": "reinstall non-local plugins whose remote version changed (all if none given)",
+        "options": { "yes": "skip confirmation", "force": "reinstall even if already up to date" }
       },
       "link":     { "description": "symlink a local plugin into the plugins dir (like npm link) — edits apply live, no reinstall needed" },
+      "unlink":   {
+        "description": "remove a linked plugin (undo link) — leaves the source directory untouched",
+        "options": { "yes": "skip confirmation" }
+      },
       "remove":   {
         "description": "remove installed plugins",
         "options": {

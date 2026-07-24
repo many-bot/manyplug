@@ -44,7 +44,7 @@ whether to ask for confirmation before destructive actions). Open the file
 for the commented list of available keys.
 
 The interface language defaults to `auto` (detected from your system
-locale, currently English and Portuguese are available) and can be pinned
+locale, currently English, Portuguese and Spanish are available) and can be pinned
 with `LANGUAGE = "pt"` in that file, or overridden per-command with the
 `MANYPLUG_LANG` environment variable.
 

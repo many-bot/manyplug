@@ -2,6 +2,10 @@ import fs from 'fs-extra';
 import path from 'path';
 import { PLUGINS_DIR, DATA_DIR } from './paths.js';
 import { registerPlugin, autoEnable, installNpmIfDeclared } from './install.js';
+import { resolvePlugin, readEnabled, writeEnabled } from './plugins.js';
+import { loadLocalRegistry, saveRegistry } from './registry-ops.js';
+import { confirm } from './ui.js';
+import { getPreference } from './config.js';
 import { log } from './logger.js';
 import { t } from './i18n.js';
 
@@ -130,4 +134,86 @@ export async function linkCommand(pluginPath = '.') {
 	const r = await linkSingle(src, manifest);
 	log.success(t('link.linked', { key: r.key, src }));
 	log.info(t('link.hint'));
+}
+
+// ------------------------------------------------------------
+// unlink command — undoes a single `link`: removes the symlink and its
+// registry/enabled-list entries, leaves the source directory untouched
+// ------------------------------------------------------------
+
+export async function unlinkCommand(input, options = {}) {
+	const t0    = Date.now();
+	const names = Array.isArray(input) ? input : (input ? [input] : []);
+
+	if (!names.length) {
+		log.error(t('unlink.usage'));
+		process.exit(1);
+	}
+
+	const skipConfirm = options.yes || !getPreference('CONFIRM', true);
+	const results = [];
+
+	for (const name of names) {
+		const found = await resolvePlugin(name);
+		if (!found) {
+			log.itemFail(t('common.notInstalled', { name }));
+			results.push({ name, success: false });
+			continue;
+		}
+
+		const { dir, manifest } = found;
+		const key = manifest.key || manifest.name;
+
+		let isLink = false;
+		try { isLink = (await fs.lstat(dir)).isSymbolicLink(); } catch { /* missing — treat as not linked */ }
+
+		if (!isLink) {
+			log.itemFail(t('unlink.notLinked', { name: key }));
+			results.push({ name, success: false });
+			continue;
+		}
+
+		if (!skipConfirm) {
+			const ok = await confirm(t('unlink.confirmPrompt', { key }), false);
+			if (!ok) {
+				log.step(t('common.skipped'));
+				results.push({ name, success: false, skipped: true });
+				continue;
+			}
+		}
+
+		try {
+			const enabled   = readEnabled();
+			const set       = new Set(enabled);
+			const keySimple = manifest.name?.toLowerCase();
+			const keyFull   = manifest.key?.toLowerCase();
+			if (set.has(keySimple)) set.delete(keySimple);
+			if (keyFull && set.has(keyFull)) set.delete(keyFull);
+			if (set.size !== enabled.size) await writeEnabled([...set]);
+
+			await fs.remove(dir); // unlinks the symlink itself — source dir is untouched
+
+			const registry = await loadLocalRegistry();
+			const regKey = Object.keys(registry.plugins || {}).find(k =>
+				k === manifest.key || k === manifest.name || k.split('/').pop() === manifest.name
+			);
+			if (regKey) {
+				delete registry.plugins[regKey];
+				await saveRegistry(registry);
+			}
+
+			log.removed(t('unlink.unlinked', { key }));
+			results.push({ name, success: true });
+		} catch (e) {
+			log.itemFail(t('common.failedWith', { message: e.message }));
+			results.push({ name, success: false, error: e.message });
+		}
+	}
+
+	const ok = results.filter(r => r.success).length;
+	if (names.length > 1) {
+		log.plain('');
+		log.info(t('unlink.summary', { ok, total: names.length, time: elapsed(t0) }));
+	}
+	if (results.some(r => !r.success && !r.skipped)) process.exit(1);
 }

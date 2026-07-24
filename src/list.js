@@ -18,7 +18,8 @@ function coloredStatus(p) {
 
 export async function listCommand(options = {}) {
 	const all     = await discoverPlugins();
-	const plugins = options.all ? all : all.filter(p => p.isEnabled);
+	const plugins = (options.all ? all : all.filter(p => p.isEnabled))
+		.sort((a, b) => (a.manifest.key || a.id).localeCompare(b.manifest.key || b.id));
 
 	if (!plugins.length) {
 		log.info(options.all ? t('list.noneInstalled') : t('list.noneEnabled'));
@@ -28,7 +29,9 @@ export async function listCommand(options = {}) {
 	const colName     = t('list.colName');
 	const colVersion  = t('list.colVersion');
 	const colCategory = t('list.colCategory');
-	const colType     = t('list.colType');
+	const colLink     = t('list.colType');
+	const linkYes     = t('list.linkYes');
+	const linkNo      = t('list.linkNo');
 
 	// column widths — computed from the actual (possibly translated) header
 	// text, not hardcoded lengths, so alignment stays correct in any language
@@ -36,20 +39,21 @@ export async function listCommand(options = {}) {
 		name:     Math.max(colName.length,     ...plugins.map(p => (p.manifest.key || p.id).length)),
 		version:  Math.max(colVersion.length,  ...plugins.map(p => (p.manifest.version || '-').length)),
 		category: Math.max(colCategory.length, ...plugins.map(p => (p.manifest.category || '-').length)),
+		link:     Math.max(colLink.length, linkYes.length, linkNo.length),
 	};
 
 	const pad    = (s, n) => String(s).padEnd(n);
-	const header = `  ${pad(colName, w.name)}  ${pad(colVersion, w.version)}  ${pad(colCategory, w.category)}  ${colType}  ${t('list.colStatus')}`;
+	const header = `  ${pad(colName, w.name)}  ${pad(colVersion, w.version)}  ${pad(colCategory, w.category)}  ${pad(colLink, w.link)}  ${t('list.colStatus')}`;
 	log.plain(chalk.bold(header));
 	log.plain(chalk.dim('  ' + '-'.repeat(header.length - 2)));
 
 	for (const p of plugins) {
 		const displayName = p.manifest.key || p.id;
 		const flag     = p.error ? chalk.red('!') : ' ';
-		const type     = p.manifest.service ? 'svc' : 'std';
+		const linked   = p.manifest.linked ? linkYes : linkNo;
 		const version  = p.manifest.version  || '-';
 		const category = p.manifest.category || '-';
-		log.plain(`${flag} ${chalk.bold(pad(displayName, w.name))}  ${chalk.dim(pad(version, w.version))}  ${pad(category, w.category)}  ${pad(type, colType.length)}  ${coloredStatus(p)}`);
+		log.plain(`${flag} ${chalk.bold(pad(displayName, w.name))}  ${chalk.dim(pad(version, w.version))}  ${pad(category, w.category)}  ${pad(linked, w.link)}  ${coloredStatus(p)}`);
 	}
 
 	const en  = plugins.filter(p => p.isEnabled).length;

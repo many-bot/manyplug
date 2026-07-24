@@ -12,7 +12,7 @@
   },
 
   "init": {
-    "invalidName": "o nome deve ter apenas letras minúsculas, números, pontos, underscores e hífens",
+    "invalidName": "o nome deve ter apenas letras minúsculas, números e hífens (2-50 caracteres)",
     "unknownCategory": "categoria desconhecida, usando \"utility\"",
     "authorPrompt": "handle do autor (ex: seu usuário do GitHub): ",
     "invalidAuthor": "o autor deve ser alfanumérico",
@@ -60,6 +60,10 @@
 
   "update": {
     "skippingNoKey": "pulando {{names}} — sem key no manyplug.json (rode manyplug validate)",
+    "skippingLocal": "pulando {{names}} — instalado localmente ou linkado, não é gerenciado pelo registro",
+    "notInRegistry": "{{key}}: não encontrado no registro, pulando",
+    "upToDate": "{{key}}@{{version}} já está atualizado",
+    "willUpdate": "{{key}} {{from}} → {{to}}",
     "nothingToUpdate": "nada para atualizar",
     "confirmPrompt": "atualizar {{count}} plugin(s)?"
   },
@@ -98,12 +102,14 @@
     "colName": "nome",
     "colVersion": "versão",
     "colCategory": "categoria",
-    "colType": "tipo",
+    "colType": "link",
     "colStatus": "status",
     "statusEnabled": "ativado",
     "statusDisabled": "desativado",
     "statusIncomplete": "incompleto",
-    "legend": "svc=serviço  std=padrão  !=sem ponto de entrada",
+    "linkYes": "link",
+    "linkNo": "-",
+    "legend": "link=plugin linkado (symlink)  !=sem ponto de entrada",
     "summary": "total={{total}} ativados={{enabled}} desativados={{disabled}}",
     "summaryIncomplete": " incompletos={{count}}"
   },
@@ -210,6 +216,14 @@
     "noProfiles": "profiles não têm código para linkar — nada a fazer"
   },
 
+  "unlink": {
+    "usage": "uso: manyplug unlink <plugin...>",
+    "notLinked": "{{name}} não é um plugin linkado (use `manyplug remove`)",
+    "confirmPrompt": "desfazer link de {{key}}? (a pasta de origem não é afetada)",
+    "unlinked": "unlinkado {{key}}",
+    "summary": "{{ok}}/{{total}} plugin(s) unlinkado(s) em {{time}}s"
+  },
+
   "search": {
     "usage": "uso: manyplug search <busca>",
     "noResults": "nenhum plugin encontrado para \"{{query}}\"",
@@ -221,9 +235,9 @@
     "title": "manyplug {{version}} - gerenciador de plugins do ManyBot",
     "unknownCommand": "comando desconhecido: {{cmd}}",
     "runHelp": "rode \"manyplug help\" para ver o uso",
-    "commandsLine": "comandos: init install update link remove search list enable disable validate version info",
+    "commandsLine": "comandos: init install update link unlink remove search list enable disable validate version info",
     "optionsLine": "opções:  -v/--version  help <comando>",
-    "aliasesLine": "aliases:  i=install  up=update  ln=link  rm=remove  s=search  ls=list  en=enable  dis=disable  val=validate  mp=manyplug",
+    "aliasesLine": "aliases:  i=install  up=update  ln=link  unln=unlink  rm=remove  s=search  ls=list  en=enable  dis=disable  val=validate  mp=manyplug",
     "commands": {
       "help":     { "description": "mostra ajuda para um comando" },
       "init":     {
@@ -244,10 +258,14 @@
         }
       },
       "update":   {
-        "description": "reinstala todos os plugins não-locais",
-        "options": { "yes": "pula confirmação" }
+        "description": "reinstala plugins não-locais cuja versão remota mudou (todos, se nenhum for informado)",
+        "options": { "yes": "pula confirmação", "force": "reinstala mesmo se já estiver atualizado" }
       },
       "link":     { "description": "cria um symlink de um plugin local na pasta de plugins (como npm link) — edições valem na hora, sem precisar reinstalar" },
+      "unlink":   {
+        "description": "remove um plugin linkado (desfaz o link) — não mexe na pasta de origem",
+        "options": { "yes": "pula confirmação" }
+      },
       "remove":   {
         "description": "remove plugins instalados",
         "options": {

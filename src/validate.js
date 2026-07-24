@@ -5,24 +5,19 @@ import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import { log } from './logger.js';
 import { t } from './i18n.js';
-
-const VALID_CATEGORIES = ['integration', 'games', 'media', 'utility', 'admin', 'fun', 'moderation', 'ai', 'education', 'social', 'economy', 'automation', 'tools'];
+import { VALID_CATEGORIES, KEY_RE, nameError } from './schema.js';
 
 // ------------------------------------------------------------
 // rules — each returns an error string or null
 // ------------------------------------------------------------
 
 const RULES = {
-	name: v =>
-		typeof v !== 'string' || !v        ? 'required string'
-		: !/^[a-z0-9-]+$/.test(v)          ? 'lowercase letters, numbers, hyphens only'
-		: v.length < 2 || v.length > 50    ? 'length must be 2-50'
-		: null,
+	name: v => nameError(v),
 
 	key: v => {
 		if (v === undefined) return null; // optional but validated if present
 		if (typeof v !== 'string') return 'must be string';
-		if (!/^[a-zA-Z0-9_-]+\/[a-z0-9-]+$/.test(v)) return 'must be format author/name';
+		if (!KEY_RE.test(v)) return 'must be format author/name';
 		return null;
 	},
 
