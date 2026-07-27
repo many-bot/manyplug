@@ -441,7 +441,8 @@ export async function installCommand(pluginsInput, options = {}) {
 // ------------------------------------------------------------
 
 export async function updateCommand(pluginsInput, options = {}) {
-  const t0    = Date.now();
+  log.info(t("update.searchingUpdates"));
+
   const names = Array.isArray(pluginsInput) ? pluginsInput : (pluginsInput ? [pluginsInput] : []);
 
   const all = await discoverPlugins();
@@ -492,7 +493,6 @@ export async function updateCommand(pluginsInput, options = {}) {
     const outdated       = remoteVersion !== undefined && remoteVersion !== localVersion;
 
     if (!outdated && !options.force) {
-      log.skipped(t('update.upToDate', { key: resolved.key, version: localVersion || '?' }));
       continue;
     }
 

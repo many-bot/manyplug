@@ -59,6 +59,7 @@
   },
 
   "update": {
+    "searchingUpdates": "Procurando por atualizações...",
     "skippingNoKey": "pulando {{names}} — sem key no manyplug.json (rode manyplug validate)",
     "skippingLocal": "pulando {{names}} — instalado localmente ou linkado, não é gerenciado pelo registro",
     "notInRegistry": "{{key}}: não encontrado no registro, pulando",

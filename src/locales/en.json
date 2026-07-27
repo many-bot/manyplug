@@ -59,6 +59,7 @@
   },
 
   "update": {
+    "searchingUpdates": "Searching for updates...",
     "skippingNoKey": "skipping {{names}} — no key in manyplug.json (run manyplug validate)",
     "skippingLocal": "skipping {{names}} — locally installed or linked, not managed by the registry",
     "notInRegistry": "{{key}}: not found in registry, skipping",
