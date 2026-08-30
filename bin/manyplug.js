@@ -132,6 +132,7 @@ program.command('validate [path]').alias('val').description('validate manyplug.j
 	.action(validateCommand);
 
 program.command('version [version]').description('apply a version to your plugin manifest (it can be any string)')
+	.option('-f, --force', 'proceed even if the git working tree has uncommitted changes')
 	.action(versionCommand);
 
 program.command('info <plugin>').description('show information about an installed plugin')
@@ -149,3 +150,4 @@ program.on('command:*', ([op]) => {
 
 await program.parseAsync();
 process.exit(0);
+

@@ -184,7 +184,11 @@
 
   "version": {
     "manifestNotFound": "manyplug.json not found, make sure to run from a plugin directory",
-    "noVersionSet": "(no version set)"
+    "noVersionSet": "(no version set)",
+    "dirtyTree": "working tree has uncommitted changes, commit or stash them first (use --force to bump anyway)",
+    "tagExists": "tag {{tag}} already exists",
+    "tagged": "tagged {{tag}}",
+    "gitFailed": "git operation failed: {{message}}"
   },
 
   "registry": {
@@ -297,8 +301,12 @@
         }
       },
       "validate": { "description": "validate manyplug.json" },
-      "version":  { "description": "apply a version to your plugin manifest (it can be any string)" },
+      "version":  {
+        "description": "apply a version to your plugin manifest (it can be any string)",
+        "options": { "force": "proceed even if the git working tree has uncommitted changes" }
+      },
       "info":     { "description": "show information about an installed plugin" }
     }
   }
 }
+

@@ -184,7 +184,11 @@
 
   "version": {
     "manifestNotFound": "manyplug.json no encontrado — ejecuta este comando dentro de un directorio de plugin",
-    "noVersionSet": "(sin versión definida)"
+    "noVersionSet": "(sin versión definida)",
+    "dirtyTree": "el árbol de trabajo tiene cambios sin confirmar, haz commit o stash antes (usa --force para continuar de todos modos)",
+    "tagExists": "la tag {{tag}} ya existe",
+    "tagged": "tag {{tag}} creada",
+    "gitFailed": "falló la operación de git: {{message}}"
   },
 
   "registry": {
@@ -297,8 +301,12 @@
         }
       },
       "validate": { "description": "valida el manyplug.json" },
-      "version":  { "description": "muestra o actualiza la versión en el manifest del plugin (puede ser cualquier string)" },
+      "version":  {
+        "description": "muestra o actualiza la versión en el manifest del plugin (puede ser cualquier string)",
+        "options": { "force": "continúa aunque el árbol de trabajo de git tenga cambios sin confirmar" }
+      },
       "info":     { "description": "muestra información de un plugin instalado" }
     }
   }
 }
+

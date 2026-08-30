@@ -13,6 +13,7 @@ const DEFAULTS = {
   LANGUAGE: 'auto',
   REGISTRY: DEFAULT_REGISTRY,
   CONFIRM:  true,
+  AUTO_TAG: true,
   PLUGINS:  [],
 };
 
@@ -47,6 +48,10 @@ const DEFAULT_TOML_EN = `\
 # Ask for confirmation before destructive actions (remove, update).
 # CONFIRM = true
 
+# Automatically "git add + commit + tag" when "manyplug version" bumps
+# the version in a git repo. Set to false to only edit manyplug.json.
+# AUTO_TAG = true
+
 # ManyBot plugins enabled on startup — managed by "manyplug enable/disable".
 PLUGINS = []
 `;
@@ -63,6 +68,11 @@ const DEFAULT_TOML_PT = `\
 # Pedir confirmação antes de ações destrutivas (remove, update).
 # CONFIRM = true
 
+# Faz "git add + commit + tag" automaticamente quando "manyplug version"
+# atualiza a versão dentro de um repositório git. Defina como false para
+# apenas editar o manyplug.json.
+# AUTO_TAG = true
+
 # Plugins do ManyBot ativados na inicialização — gerenciado por "manyplug enable/disable".
 PLUGINS = []
 `;
@@ -78,6 +88,11 @@ const DEFAULT_TOML_ES = `\
 
 # Pedir confirmación antes de acciones destructivas (remove, update).
 # CONFIRM = true
+
+# Hace "git add + commit + tag" automáticamente cuando "manyplug version"
+# actualiza la versión dentro de un repositorio git. Pon false para
+# solo editar el manyplug.json.
+# AUTO_TAG = true
 
 # Plugins de ManyBot activados al iniciar — gestionado por "manyplug enable/disable".
 PLUGINS = []
@@ -201,3 +216,4 @@ export function setPreference(key, value) {
   const literal = typeof value === 'string' ? JSON.stringify(value) : String(value);
   patchKey(key, literal);
 }
+
