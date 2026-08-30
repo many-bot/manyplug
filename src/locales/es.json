@@ -145,6 +145,7 @@
     "binaryFoundVersion": "binario '{{bin}}' encontrado, versión: {{version}}",
     "binaryVersionUnknown": "binario '{{bin}}' encontrado pero no se pudo determinar su versión",
     "codeScanFailed": "no se pudo completar la validación de código: {{message}}",
+    "ctxSchemaUnavailable": "@manybot/types no encontrado — omitiendo verificación de uso de ctx.*",
     "depsAdded": "agregado(s) a dependencies (encontrado vía ctx.plugins.require): {{deps}}",
     "depsWriteFailed": "error al escribir dependencies en manyplug.json: {{message}}",
     "depsUnused": "declarado(s) pero no referenciado(s) vía ctx.plugins.require: {{deps}}",

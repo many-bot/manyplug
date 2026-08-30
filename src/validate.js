@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { log } from './logger.js';
 import { t } from './i18n.js';
 import { VALID_CATEGORIES, KEY_RE, nameError } from './schema.js';
+import { loadCtxSchema } from './ctx-schema.js';
 
 // ------------------------------------------------------------
 // rules — each returns an error string or null
@@ -115,34 +116,10 @@ async function getJsFiles(dir) {
 	return results;
 }
 
-// Mirrors manybot's ctx surface (drivers/whatsapp/api/index.ts buildBaseApi
-// + buildApi). Kept manually in sync — if manybot's ctx API changes, this
-// needs a matching update or "manyplug validate" starts flagging valid code.
-const VALID_CTX_KEYS = {
-	log: ['info', 'warn', 'error', 'success'],
-	config: ['get'],
-	i18n: ['t', 'createT', 'reload', 'getCurrentLang'],
-	utils: ['emptyFolder'],
-	download: ['enqueue'],
-	scheduler: ['schedule'],
-	plugins: ['get', 'require', 'exists'],
-	contacts: ['get', 'getPfpUrl', 'getPfpPath', 'getAbout', 'block', 'unblock'],
-	storage: ['dir', 'resolve'],
-	send: ['text', 'image', 'video', 'audio', 'sticker', 'file', 'poll', 'to'],
-	msg: ['body', 'type', 'fromMe', 'sender', 'senderName', 'command', 'args', 'is', 'hasMedia', 'isGif', 'downloadMedia', 'hasReply', 'getReply', 'reply', 'react', 'delete', 'pin', 'hasPrefix', 'getContact'],
-	chat: ['id', 'name', 'isGroup', 'getParticipants', 'isAdmin', 'isSenderAdmin', 'isBotAdmin', 'clearMessages'],
-	admin: ['add', 'kick', 'promote', 'demote', 'setSubject', 'setDescription', 'setProfilePic', 'getInviteLink', 'revokeInvite'],
-	me: ['setName', 'setAbout', 'setProfilePic'],
-	poll: ['create', 'get'],
-	events: ['on', 'once', 'cleanup'],
-	wa: ['sock', 'store', 'msg', 'downloadMedia'],
-	settings: ['get', 'getAll', 'set', 'delete', 'deleteAll', 'global', 'forChat', 'link', 'unlink', 'getCommunityId', 'getCommunityChats'],
-};
-
-const ROOT_KEYS = new Set([
-	...Object.keys(VALID_CTX_KEYS),
-	't', 'botId', 'tg', 'dc',
-]);
+// ctx surface derived from @manybot/types (see ctx-schema.js) instead of a
+// hand-maintained list — stays correct as long as the dependency is current.
+const ctxSchema = loadCtxSchema();
+const { ROOT_KEYS, VALID_CTX_KEYS } = ctxSchema;
 
 // ------------------------------------------------------------
 // semver and system info helpers
@@ -412,50 +389,54 @@ export async function validateCommand(pluginPath = '.') {
 	// code scanning for invalid ctx usage and executed binaries
 	const requiredPluginKeys = new Set();
 	if (!isPack && !isProfile) {
+		if (!ctxSchema.available) warn('ctx-schema', t('validate.ctxSchemaUnavailable'));
+
 		try {
 			const codeFiles = await getJsFiles(abs);
 			for (const file of codeFiles) {
 				const relativeFile = path.relative(abs, file);
 				const content = await fs.readFile(file, 'utf8');
 
-				// Check destructured keys
-				const destructureRegex = /const\s*\{\s*([^}]+)\s*\}\s*=\s*ctx\b/g;
-				const destrMatches = [...content.matchAll(destructureRegex)];
-				for (const match of destrMatches) {
-					const props = match[1].split(',').map(p => p.trim().split(':')[0].trim());
-					for (const prop of props) {
-						if (prop && !ROOT_KEYS.has(prop)) {
-							warn(`${relativeFile}`, t('validate.destructuredUnknown', { prop }));
+				if (ctxSchema.available) {
+					// Check destructured keys
+					const destructureRegex = /const\s*\{\s*([^}]+)\s*\}\s*=\s*ctx\b/g;
+					const destrMatches = [...content.matchAll(destructureRegex)];
+					for (const match of destrMatches) {
+						const props = match[1].split(',').map(p => p.trim().split(':')[0].trim());
+						for (const prop of props) {
+							if (prop && !ROOT_KEYS.has(prop)) {
+								warn(`${relativeFile}`, t('validate.destructuredUnknown', { prop }));
+							}
 						}
 					}
-				}
 
-				// Check ctx.<prop> and ctx.<prop>.<nested> usage
-				const ctxRegex = /\bctx\.([a-zA-Z0-9_$]+)(?:\.([a-zA-Z0-9_$]+))?/g;
-				const matches = [...content.matchAll(ctxRegex)];
-				for (const match of matches) {
-					const prop = match[1];
-					const nested = match[2];
+					// Check ctx.<prop> and ctx.<prop>.<nested> usage
+					const ctxRegex = /\bctx\.([a-zA-Z0-9_$]+)(?:\.([a-zA-Z0-9_$]+))?/g;
+					const matches = [...content.matchAll(ctxRegex)];
+					for (const match of matches) {
+						const prop = match[1];
+						const nested = match[2];
 
-					if (!ROOT_KEYS.has(prop)) {
-						warn(`${relativeFile}`, t('validate.unknownCtxProp', { prop }));
-					} else if (nested && VALID_CTX_KEYS[prop]) {
-						if (!VALID_CTX_KEYS[prop].includes(nested)) {
-							warn(`${relativeFile}`, t('validate.unknownCtxMethod', { prop, nested }));
+						if (!ROOT_KEYS.has(prop)) {
+							warn(`${relativeFile}`, t('validate.unknownCtxProp', { prop }));
+						} else if (nested && VALID_CTX_KEYS[prop]) {
+							if (!VALID_CTX_KEYS[prop].includes(nested)) {
+								warn(`${relativeFile}`, t('validate.unknownCtxMethod', { prop, nested }));
+							}
 						}
 					}
-				}
 
-				// Some ctx properties are sender objects (WAMessageSender) — they expose
-				// methods like .text()/.image()/etc but aren't callable themselves. The
-				// 2-level regex above can't tell "ctx.send.text(...)" (valid) apart from
-				// "ctx.send(...)" (invalid), so check those known paths directly.
-				const NON_CALLABLE_SENDERS = ['send', 'msg.reply'];
-				for (const senderPath of NON_CALLABLE_SENDERS) {
-					const escaped = senderPath.replace(/\./g, '\\.');
-					const directCallRegex = new RegExp(`\\bctx\\.${escaped}\\s*\\(`);
-					if (directCallRegex.test(content)) {
-						warn(`${relativeFile}`, t('validate.senderNotCallable', { path: `ctx.${senderPath}` }));
+					// Some ctx properties are sender objects (WAMessageSender) — they expose
+					// methods like .text()/.image()/etc but aren't callable themselves. The
+					// 2-level regex above can't tell "ctx.send.text(...)" (valid) apart from
+					// "ctx.send(...)" (invalid), so check those known paths directly.
+					const NON_CALLABLE_SENDERS = ['send', 'msg.reply'];
+					for (const senderPath of NON_CALLABLE_SENDERS) {
+						const escaped = senderPath.replace(/\./g, '\\.');
+						const directCallRegex = new RegExp(`\\bctx\\.${escaped}\\s*\\(`);
+						if (directCallRegex.test(content)) {
+							warn(`${relativeFile}`, t('validate.senderNotCallable', { path: `ctx.${senderPath}` }));
+						}
 					}
 				}
 
