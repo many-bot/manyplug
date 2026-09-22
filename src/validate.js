@@ -3,10 +3,12 @@ import path from 'path';
 import os from 'os';
 import { execSync } from 'node:child_process';
 import chalk from 'chalk';
+import ts from 'typescript';
 import { log } from './logger.js';
 import { t } from './i18n.js';
 import { VALID_CATEGORIES, KEY_RE, nameError } from './schema.js';
-import { loadCtxSchema } from './ctx-schema.js';
+import { loadCtxSchema, ensureLatestTypes } from './ctx-schema.js';
+import { typecheckEntry } from './typecheck.js';
 
 // ------------------------------------------------------------
 // rules — each returns an error string or null
@@ -116,10 +118,54 @@ async function getJsFiles(dir) {
 	return results;
 }
 
-// ctx surface derived from @manybot/types (see ctx-schema.js) instead of a
-// hand-maintained list — stays correct as long as the dependency is current.
-const ctxSchema = loadCtxSchema();
-const { ROOT_KEYS, VALID_CTX_KEYS } = ctxSchema;
+// ------------------------------------------------------------
+// TypeScript-style location + source preview for code-scan findings
+// ------------------------------------------------------------
+
+// 1-based { line, col } of a character offset into `content`.
+function locate(content, index) {
+	const before = content.slice(0, index);
+	const lines = before.split('\n');
+	return { line: lines.length, col: lines[lines.length - 1].length + 1 };
+}
+
+// Renders a `tsc`-style two-line preview: the source line, then a caret
+// (~~~) under the exact span that triggered the warning.
+//   12 │   await ctx.send(
+//      │         ~~~~~~~~
+function snippetAt(content, index, length) {
+	const { line, col } = locate(content, index);
+	const lineText = (content.split('\n')[line - 1] ?? '').replace(/\t/g, ' ');
+	const gutter = String(line);
+	const pad = ' '.repeat(gutter.length);
+	const caret = chalk.red('~'.repeat(Math.max(1, length)));
+	return {
+		line, col,
+		text:
+			`\n      ${chalk.dim(gutter)} │ ${lineText}\n` +
+			`      ${pad} │ ${' '.repeat(Math.max(0, col - 1))}${caret}`,
+	};
+}
+
+// Maps each top-level key of a JSON object to its exact { start, end }
+// span (covering `"key": value`, comma excluded) via TypeScript's own JSON
+// parser — same trick used for the ctx.* source scan, just pointed at
+// manyplug.json instead of plugin code. Returns an empty Map on anything
+// that isn't a plain top-level object (parse error, array root, etc.).
+function mapManifestFields(rawManifest) {
+	const fields = new Map();
+	const sourceFile = ts.parseJsonText('manyplug.json', rawManifest);
+	const root = sourceFile.statements[0]?.expression;
+	if (!root || !ts.isObjectLiteralExpression(root)) return fields;
+
+	for (const prop of root.properties) {
+		if (!ts.isPropertyAssignment(prop) || !prop.name) continue;
+		const key = ts.isStringLiteral(prop.name) ? prop.name.text : prop.name.getText(sourceFile);
+		fields.set(key, { start: prop.getStart(sourceFile), end: prop.getEnd() });
+	}
+	return fields;
+}
+
 
 // ------------------------------------------------------------
 // semver and system info helpers
@@ -207,6 +253,38 @@ async function getManybotVersion() {
 	return null;
 }
 
+// major.minor.patch only — a leading "v" and any -rc/-beta/etc. suffix are
+// dropped, so an installed RC doesn't get flagged as "outdated" against a
+// same-numbered (or lower) stable release still sitting on the registry.
+function versionCore(v) {
+	const clean = (v || '').replace(/^v/, '').split('-')[0];
+	const [major = 0, minor = 0, patch = 0] = clean.split('.').map(Number);
+	return { major, minor, patch };
+}
+
+function isNewerVersion(latest, installed) {
+	const a = versionCore(latest), b = versionCore(installed);
+	if (a.major !== b.major) return a.major > b.major;
+	if (a.minor !== b.minor) return a.minor > b.minor;
+	return a.patch > b.patch;
+}
+
+// Best-effort, silent-on-failure check against the npm registry — same
+// spirit as ensureLatestTypes() in ctx-schema.js, but this one never
+// installs anything on its own: upgrading the user's actual running bot
+// is their call, so validate only surfaces that an update exists.
+async function getLatestManybotVersion() {
+	try {
+		const res = await fetch('https://registry.npmjs.org/@manybot/manybot/latest', {
+			signal: AbortSignal.timeout(3000),
+		});
+		if (!res.ok) return null;
+		return (await res.json()).version || null;
+	} catch {
+		return null; // offline / registry unreachable
+	}
+}
+
 function getBinaryVersion(cmd) {
 	for (const flag of ['--version', '-version', '-v']) {
 		try {
@@ -259,8 +337,11 @@ export async function validateCommand(pluginPath = '.') {
 		process.exit(1);
 	}
 
-	let manifest;
-	try { manifest = await fs.readJson(manifestPath); }
+	let manifest, rawManifest;
+	try {
+		rawManifest = await fs.readFile(manifestPath, 'utf8');
+		manifest = JSON.parse(rawManifest);
+	}
 	catch (e) { log.error(t('validate.invalidManifest', { message: e.message })); process.exit(1); }
 
 	const isPack    = manifest.type === 'pluginpack';
@@ -271,13 +352,33 @@ export async function validateCommand(pluginPath = '.') {
 	const err  = (field, msg) => errors.push(`  ${chalk.red('error')}   ${field.padEnd(24)} ${msg}`);
 	const warn = (field, msg) => warnings.push(`  ${chalk.yellow('warning')} ${field.padEnd(24)} ${msg}`);
 
+	// Same as warn, but for a finding tied to an exact spot in a source file:
+	// the field becomes `file:line:col` (clickable in most terminals) and a
+	// tsc-style source preview is appended under the message.
+	const warnAt = (relativeFile, content, index, length, msg) => {
+		const { line, col, text } = snippetAt(content, index, length);
+		warn(`${relativeFile}:${line}:${col}`, msg + text);
+	};
+
+	// Non-fatal, informational line — same column layout as err/warn so
+	// everything lines up. infoContinued() indents a follow-up line under
+	// where the message text starts, with no repeated "field" label.
+	const info = (field, msg) => log.plain(`  ${chalk.cyan('info')}    ${field.padEnd(24)} ${msg}`);
+	const infoContinued = msg => log.plain(`${' '.repeat(35)}${msg}`);
+
 	// required fields (category isn't meaningful for a profile)
 	for (const f of REQUIRED)
 		if (!skipField.has(f) && !(f in manifest)) err(f, t('validate.missingRequired'));
 
 	// field rules
+	const manifestFields = mapManifestFields(rawManifest);
 	for (const [f, v] of Object.entries(manifest)) {
-		if (!KNOWN.has(f)) { warn(f, t('validate.unknownField')); continue; }
+		if (!KNOWN.has(f)) {
+			const span = manifestFields.get(f);
+			if (span) warnAt('manyplug.json', rawManifest, span.start, span.end - span.start, t('validate.unknownField'));
+			else warn(f, t('validate.unknownField')); // fallback if the AST scan couldn't locate it
+			continue;
+		}
 		if (skipField.has(f)) continue;
 		const msg = RULES[f]?.(v);
 		if (msg) err(f, msg);
@@ -308,16 +409,24 @@ export async function validateCommand(pluginPath = '.') {
 	// manybot version check (not applicable to packs/profiles — they don't run)
 	if (!isPack && !isProfile) {
 		const mbVersion = await getManybotVersion();
+
 		if (manifest.manybotVersion) {
 			if (!mbVersion) {
 				warn('manybotVersion', t('validate.mbVersionMissingInstall', { range: manifest.manybotVersion }));
 			} else if (!satisfies(mbVersion, manifest.manybotVersion)) {
 				warn('manybotVersion', t('validate.mbVersionMismatch', { version: mbVersion, range: manifest.manybotVersion }));
-			} else {
-				log.plain(`  ${chalk.cyan('info')}    manybotVersion           ${t('validate.mbVersionOk', { version: mbVersion, range: manifest.manybotVersion })}`);
 			}
-		} else if (mbVersion) {
-			log.plain(`  ${chalk.cyan('info')}    manybotVersion           ${t('validate.mbVersionDetected', { version: mbVersion })}`);
+		}
+
+		if (mbVersion) {
+			info('manybotVersion', t('validate.mbVersionInstalled', { version: mbVersion }));
+
+			const latest = await getLatestManybotVersion();
+			if (latest && isNewerVersion(latest, mbVersion)) {
+				info('manybotVersion', t('validate.mbUpdateAvailable', { from: mbVersion, to: latest }));
+				infoContinued(t('validate.mbUpdateCmd'));
+				infoContinued(t('validate.mbUpdateNote'));
+			}
 		}
 	}
 
@@ -389,7 +498,31 @@ export async function validateCommand(pluginPath = '.') {
 	// code scanning for invalid ctx usage and executed binaries
 	const requiredPluginKeys = new Set();
 	if (!isPack && !isProfile) {
+		// ctx surface derived from @manybot/types (see ctx-schema.js) instead of
+		// a hand-maintained list — stays correct as long as the dependency is
+		// current, which is why the very latest version is pulled from npm
+		// (best-effort, silent offline) right before parsing it.
+		await ensureLatestTypes();
+		const ctxSchema = loadCtxSchema();
+		const { ROOT_KEYS, VALID_CTX_KEYS } = ctxSchema;
+
 		if (!ctxSchema.available) warn('ctx-schema', t('validate.ctxSchemaUnavailable'));
+
+		// The entry file gets a real type-check against @manybot/types (see
+		// typecheck.js): ctx is typed automatically, so aliases, destructuring
+		// and sent-message handles are all followed — something the regex scan
+		// below can't do. Inside the handlers it checked, the checker is
+		// authoritative and the regex rules stay out of its way; everything
+		// else (helpers, other files) keeps using them.
+		const entryFile = path.resolve(abs, manifest.main || 'index.js');
+		let typed = null;
+		if (ctxSchema.available) {
+			try {
+				typed = typecheckEntry(entryFile, ctxSchema.file);
+			} catch (e) {
+				warn('type-check', t('validate.typeCheckFailed', { message: e.message }));
+			}
+		}
 
 		try {
 			const codeFiles = await getJsFiles(abs);
@@ -397,32 +530,52 @@ export async function validateCommand(pluginPath = '.') {
 				const relativeFile = path.relative(abs, file);
 				const content = await fs.readFile(file, 'utf8');
 
+				const covered = typed && path.resolve(file) === entryFile ? typed.covered : [];
+				const warnCtx = (index, length, msg) => {
+					if (covered.some(([from, to]) => index >= from && index < to)) return;
+					warnAt(relativeFile, content, index, length, msg);
+				};
+
+				if (covered.length) {
+					for (const issue of typed.issues) {
+						const msg = issue.senderPath ? t('validate.senderNotCallable', { path: issue.senderPath })
+							: issue.notCallable ? t('validate.typeNotCallable', { path: issue.notCallable }) +
+								(issue.hint ? ` ${t('validate.typeNotCallableHint', { path: issue.notCallable, prop: issue.hint })}` : '')
+							: issue.message;
+						warnAt(relativeFile, content, issue.start, issue.length, `${msg} ${chalk.dim(`TS${issue.code}`)}`);
+					}
+				}
+
 				if (ctxSchema.available) {
-					// Check destructured keys
+					// Check destructured keys — offsets are tracked per comma-separated
+					// segment so a rename like `{ msg: message }` still flags/points at
+					// the actual key ("msg"), not the local alias ("message").
 					const destructureRegex = /const\s*\{\s*([^}]+)\s*\}\s*=\s*ctx\b/g;
-					const destrMatches = [...content.matchAll(destructureRegex)];
-					for (const match of destrMatches) {
-						const props = match[1].split(',').map(p => p.trim().split(':')[0].trim());
-						for (const prop of props) {
-							if (prop && !ROOT_KEYS.has(prop)) {
-								warn(`${relativeFile}`, t('validate.destructuredUnknown', { prop }));
-							}
+					for (const match of content.matchAll(destructureRegex)) {
+						const propsText  = match[1];
+						const propsStart = match.index + match[0].indexOf(propsText);
+						let cursor = 0;
+						for (const segment of propsText.split(',')) {
+							const segStart = propsStart + cursor;
+							cursor += segment.length + 1; // +1 for the comma consumed by split()
+							const keyPart = segment.split(':')[0];
+							const prop = keyPart.trim();
+							if (!prop || ROOT_KEYS.has(prop)) continue;
+							const idx = segStart + (keyPart.length - keyPart.trimStart().length);
+							warnCtx(idx, prop.length, t('validate.destructuredUnknown', { prop }));
 						}
 					}
 
 					// Check ctx.<prop> and ctx.<prop>.<nested> usage
 					const ctxRegex = /\bctx\.([a-zA-Z0-9_$]+)(?:\.([a-zA-Z0-9_$]+))?/g;
-					const matches = [...content.matchAll(ctxRegex)];
-					for (const match of matches) {
-						const prop = match[1];
+					for (const match of content.matchAll(ctxRegex)) {
+						const prop   = match[1];
 						const nested = match[2];
 
 						if (!ROOT_KEYS.has(prop)) {
-							warn(`${relativeFile}`, t('validate.unknownCtxProp', { prop }));
-						} else if (nested && VALID_CTX_KEYS[prop]) {
-							if (!VALID_CTX_KEYS[prop].includes(nested)) {
-								warn(`${relativeFile}`, t('validate.unknownCtxMethod', { prop, nested }));
-							}
+							warnCtx(match.index, match[0].length, t('validate.unknownCtxProp', { prop }));
+						} else if (nested && VALID_CTX_KEYS[prop] && !VALID_CTX_KEYS[prop].includes(nested)) {
+							warnCtx(match.index, match[0].length, t('validate.unknownCtxMethod', { prop, nested }));
 						}
 					}
 
@@ -433,9 +586,9 @@ export async function validateCommand(pluginPath = '.') {
 					const NON_CALLABLE_SENDERS = ['send', 'msg.reply'];
 					for (const senderPath of NON_CALLABLE_SENDERS) {
 						const escaped = senderPath.replace(/\./g, '\\.');
-						const directCallRegex = new RegExp(`\\bctx\\.${escaped}\\s*\\(`);
-						if (directCallRegex.test(content)) {
-							warn(`${relativeFile}`, t('validate.senderNotCallable', { path: `ctx.${senderPath}` }));
+						const directCallRegex = new RegExp(`\\bctx\\.${escaped}\\s*\\(`, 'g');
+						for (const match of content.matchAll(directCallRegex)) {
+							warnCtx(match.index, match[0].length, t('validate.senderNotCallable', { path: `ctx.${senderPath}` }));
 						}
 					}
 				}
@@ -454,15 +607,16 @@ export async function validateCommand(pluginPath = '.') {
 					const bin = match[1];
 					if (checkedBinaries.has(bin)) continue;
 					checkedBinaries.add(bin);
+					const binIndex = match.index + match[0].lastIndexOf(bin);
 
 					if (!commandExists(bin)) {
-						warn(`${relativeFile}`, t('validate.binaryMissing', { bin }));
+						warnAt(relativeFile, content, binIndex, bin.length, t('validate.binaryMissing', { bin }));
 					} else {
 						const version = getBinaryVersion(bin);
 						if (version) {
 							log.plain(`  ${chalk.cyan('info')}    ${relativeFile.padEnd(24)} ${t('validate.binaryFoundVersion', { bin, version })}`);
 						} else {
-							warn(`${relativeFile}`, t('validate.binaryVersionUnknown', { bin }));
+							warnAt(relativeFile, content, binIndex, bin.length, t('validate.binaryVersionUnknown', { bin }));
 						}
 					}
 				}
@@ -520,3 +674,4 @@ export async function validateCommand(pluginPath = '.') {
 	log.plain(`\n${t('validate.summary', { errors: errCount, warnings: warnCount })}`);
 	if (errors.length) process.exit(1);
 }
+

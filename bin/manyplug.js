@@ -135,7 +135,7 @@ program.command('version [version]').description('apply a version to your plugin
 	.option('-f, --force', 'proceed even if the git working tree has uncommitted changes')
 	.action(versionCommand);
 
-program.command('info <plugin>').description('show information about an installed plugin')
+program.command('info <plugin>').alias('show').description('show information about an installed plugin')
 	.action(infoCommand);
 
 // ------------------------------------------------------------

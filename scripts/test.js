@@ -244,6 +244,96 @@ isolated('validate missing external dep is error', (mp, mpf, home) => {
   assert.ok(out.includes('errors=1'), `unexpected output:\n${out}`);
 });
 
+// validate: ctx type-check (entry file is checked against @manybot/types,
+// no JSDoc required in the plugin)
+
+function typedPlugin(dir, code) {
+  fs.ensureDirSync(dir);
+  fs.writeJsonSync(path.join(dir, 'manyplug.json'), {
+    name: 'typed-plugin', key: 'eu/typed-plugin', version: '1.0.0', category: 'utility', author: 'eu',
+  });
+  fs.writeFileSync(path.join(dir, 'index.js'), code);
+}
+
+isolated('validate flags msg.reply() called through a destructured alias', (mp, mpf, home) => {
+  const dir = path.join(home, 'alias-plugin');
+  typedPlugin(dir, [
+    'export default async function (ctx) {',
+    '  const { msg } = ctx;',
+    '  await msg.reply("oi");',
+    '}',
+    '',
+  ].join('\n'));
+  const out = mpf(`validate ${dir}`);
+  assert.ok(out.includes("'msg.reply' is a sender object"), `unexpected output:\n${out}`);
+  assert.ok(out.includes('index.js:3:'), `unexpected output:\n${out}`);
+  assert.ok(out.includes('errors=0'), `unexpected output:\n${out}`);
+});
+
+isolated('validate flags unknown ctx members and bad options via the type checker', (mp, mpf, home) => {
+  const dir = path.join(home, 'types-plugin');
+  typedPlugin(dir, [
+    'export default async (ctx) => {',
+    '  const m = ctx.msg;',
+    '  await m.naoExiste();',
+    '  await ctx.send.text("x", { mention: [] });',
+    '};',
+    '',
+  ].join('\n'));
+  const out = mpf(`validate ${dir}`);
+  assert.ok(out.includes("does not exist on type 'WAMessageContext'"), `unexpected output:\n${out}`);
+  assert.ok(out.includes("Did you mean to write 'mentions'"), `unexpected output:\n${out}`);
+});
+
+isolated('validate accepts correct ctx usage without any type warnings', (mp, mpf, home) => {
+  const dir = path.join(home, 'ok-plugin');
+  typedPlugin(dir, [
+    'export async function setup(ctx) {',
+    '  ctx.log.info("ready");',
+    '}',
+    '',
+    'export default async function (ctx) {',
+    '  const { msg } = ctx;',
+    '  if (!msg.is("ping")) return;',
+    '  const sent = await ctx.send.text("pong");',
+    '  await sent.react("👍");',
+    '  await sent.reply.text("ok", { mentions: [] });',
+    '  await msg.reply.text(String(ctx.config.get("prefix", "!")));',
+    '}',
+    '',
+  ].join('\n'));
+  const out = mpf(`validate ${dir}`);
+  assert.ok(!/TS\d{4}/.test(out), `unexpected output:\n${out}`);
+  assert.ok(!out.includes('sender object'), `unexpected output:\n${out}`);
+  assert.ok(out.includes('errors=0'), `unexpected output:\n${out}`);
+});
+
+isolated('validate reports a literal ctx.msg.reply() only once (checker + regex overlap)', (mp, mpf, home) => {
+  const dir = path.join(home, 'dup-plugin');
+  typedPlugin(dir, [
+    'export default async function (ctx) {',
+    '  await ctx.msg.reply("oi");',
+    '}',
+    '',
+  ].join('\n'));
+  const out = mpf(`validate ${dir}`);
+  assert.equal(out.split('is a sender object').length - 1, 1, `unexpected output:\n${out}`);
+});
+
+isolated('validate still scans helpers outside the typed handlers with the regex rules', (mp, mpf, home) => {
+  const dir = path.join(home, 'helper-plugin');
+  typedPlugin(dir, [
+    'export default async function (ctx) {',
+    '  await ctx.msg.reply.text("ok");',
+    '}',
+    '',
+    'function helper(ctx) { return ctx.msg.reply("x"); }',
+    '',
+  ].join('\n'));
+  const out = mpf(`validate ${dir}`);
+  assert.ok(out.includes('index.js:5:'), `unexpected output:\n${out}`);
+});
+
 // ------------------------------------------------------------
 // init
 // ------------------------------------------------------------
@@ -283,3 +373,4 @@ isolated('init + install --local', (mp, mpf, home) => {
   const out = mp(`install --local ${dir}`);
   assert.ok(out.includes('installed meu-plugin'), `unexpected output:\n${out}`);
 });
+

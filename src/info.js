@@ -34,7 +34,9 @@ export async function infoCommand(name) {
 	const hasData  = await fs.pathExists(dataPath);
 	const dataSize = hasData ? await getDirSize(dataPath) : 0;
 
-	const relDir     = path.relative(process.cwd(), dir);
+	const absDir     = path.resolve(dir);
+	const isLink     = m.linked || (await fs.lstat(dir)).isSymbolicLink();
+	const linkTarget = isLink ? await fs.realpath(dir).catch(() => null) : null;
 	const statusText = !hasEntry ? t('list.statusIncomplete') : isEnabled ? t('list.statusEnabled') : t('list.statusDisabled');
 	const status     = !hasEntry ? chalk.yellow(statusText) : isEnabled ? chalk.green(statusText) : chalk.dim(statusText);
 	const type       = m.service ? t('info.typeService') : t('info.typeStandard');
@@ -54,7 +56,8 @@ export async function infoCommand(name) {
 	row(t('info.rowType'),     type);
 	row(t('info.rowStatus'),   status);
 	row(t('info.rowMain'),     m.main || 'index.js');
-	row(t('info.rowPath'),     relDir);
+	row(t('info.rowPath'),     absDir);
+	if (isLink) row(t('info.rowLinkTarget'), linkTarget || chalk.dim(t('info.linkTargetBroken')));
 	row(t('info.rowSize'),     formatSize(pluginSize));
 	row(t('info.rowData'),     hasData ? `${dataPath}  (${formatSize(dataSize)})` : t('info.dataNone'));
 
