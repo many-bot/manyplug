@@ -250,7 +250,7 @@
     "unknownCommand": "comando desconhecido: {{cmd}}",
     "runHelp": "rode \"manyplug help\" para ver o uso",
     "commandsLine": "comandos: init install update link unlink remove search list enable disable validate version info",
-    "optionsLine": "opções:  -v/--version  help <comando>",
+    "optionsLine": "opções:  -v/--version  -C/--config-dir <dir>  help <comando>",
     "aliasesLine": "aliases:  i=install  up=update  ln=link  unln=unlink  rm=remove  s=search  ls=list  en=enable  dis=disable  val=validate  mp=manyplug",
     "commands": {
       "help":     { "description": "mostra ajuda para um comando" },
