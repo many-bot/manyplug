@@ -43,6 +43,10 @@ of enabled plugins plus a few preferences (interface language, registry URL,
 whether to ask for confirmation before destructive actions). Open the file
 for the commented list of available keys.
 
+By default, everything (plugins, data, registry, config) lives under
+`~/.manybot`. Use `-C, --config-dir <dir>` to point ManyPlug at a different
+location, e.g. `manyplug -C /path/to/dir list`.
+
 The interface language defaults to `auto` (detected from your system
 locale, currently English, Portuguese and Spanish are available) and can be pinned
 with `LANGUAGE = "pt"` in that file, or overridden per-command with the

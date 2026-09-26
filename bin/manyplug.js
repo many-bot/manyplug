@@ -12,6 +12,7 @@ import { linkCommand, unlinkCommand }    from '../src/link.js';
 import { infoCommand }                   from '../src/info.js';
 import { versionCommand }                from '../src/version.js';
 import { searchCommand }                 from '../src/search.js';
+import { setConfigDir }                  from '../src/paths.js';
 import { t } from '../src/i18n.js';
 
 const pkg = createRequire(import.meta.url)('../package.json');
@@ -72,7 +73,13 @@ function printHelp(cmd) {
 program
 	.name('manyplug')
 	.version(pkg.version, '-v, --version')
+	.option('-C, --config-dir <dir>', 'config directory (default: ~/.manybot)')
 	.helpOption(false);
+
+program.hook('preAction', thisCommand => {
+	const { configDir } = thisCommand.opts();
+	if (configDir) setConfigDir(configDir);
+});
 
 program.command('help [command]').description('show help for a command')
 	.action(cmd => {
