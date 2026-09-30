@@ -134,6 +134,7 @@ function migrateLegacyConf() {
 // ------------------------------------------------------------
 
 let cache = null;
+let cachePath = null;
 
 function readRawToml() {
   if (!existsSync(TOML_PLUGIN_FILE)) return null;
@@ -150,7 +151,9 @@ function readRawToml() {
  * after an external write.
  */
 export function loadConfig(force = false) {
-  if (cache && !force) return cache;
+  if (cache && cachePath === TOML_PLUGIN_FILE && !force) return cache;
+  cache = null;
+  cachePath = TOML_PLUGIN_FILE;
 
   const raw = readRawToml();
 
